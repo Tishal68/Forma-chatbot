@@ -49,5 +49,35 @@ class Settings:
     def GENERATION_TIMEOUT(self) -> float:
         return float(os.getenv('GENERATION_TIMEOUT', '300'))
 
+    @property
+    def ATTACHMENTS_DIR(self) -> Path:
+        dir_path = Path(os.getenv('ATTACHMENTS_DIR', 'data/attachments'))
+        if not dir_path.is_absolute():
+            dir_path = ROOT / dir_path
+        dir_path.mkdir(parents=True, exist_ok=True)
+        return dir_path
+
+    @property
+    def MAX_ATTACHMENT_SIZE_BYTES(self) -> int:
+        mb = int(os.getenv('MAX_ATTACHMENT_SIZE_MB', '25'))
+        return mb * 1024 * 1024
+
+    @property
+    def SEARCH_PROVIDER(self) -> str:
+        return os.getenv('SEARCH_PROVIDER', 'duckduckgo').lower()
+
+    @property
+    def TAVILY_API_KEY(self) -> str:
+        return os.getenv('TAVILY_API_KEY', '')
+
+    @property
+    def BRAVE_API_KEY(self) -> str:
+        return os.getenv('BRAVE_API_KEY', '')
+
+    @property
+    def SERPAPI_API_KEY(self) -> str:
+        return os.getenv('SERPAPI_API_KEY', '')
+
 
 settings = Settings()
+

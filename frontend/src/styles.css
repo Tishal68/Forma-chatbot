@@ -471,31 +471,311 @@ h1 {
   justify-content: space-between;
   margin-top: 12px;
 }
-.composer-bottom > span {
-  font-size: 10px;
+.composer-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tool-button {
+  background: none;
+  border: 0;
   color: var(--muted);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s ease;
 }
-.mini-mark {
-  font-size: 18px;
-  vertical-align: middle;
-  margin-right: 6px;
-  color: #8ca493;
+.tool-button:hover {
+  background: var(--hover);
+  color: var(--text);
 }
-.send {
-  background: #286354;
+.tool-button.active {
+  color: #1e6b52;
+  background: rgba(30, 107, 82, 0.14);
+}
+.active-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #1e6b52;
+}
+.composer-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.send-hint {
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.send-hint span {
+  font-size: 11px;
+  opacity: 0.8;
+}
+.primary-send {
+  background: #1e4b3e;
   color: #fff;
   border: 0;
   border-radius: 8px;
-  width: 34px;
+  padding: 0 14px;
   height: 34px;
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.primary-send:hover {
+  background: #286354;
+}
+.primary-send:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.send.stop {
+  background: #7a2b2b;
+  width: auto;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.send.stop:hover {
+  background: #943434;
+}
+.composer.drag-over {
+  border-color: #286354;
+  background: rgba(40, 99, 84, 0.04);
+  box-shadow: 0 0 0 2px rgba(40, 99, 84, 0.2);
+}
+.composer-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--border);
+}
+.attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--hover);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 12px;
+  max-width: 240px;
+}
+.attachment-chip.uploading {
+  border-color: #8ca493;
+}
+.attachment-chip.has-error {
+  border-color: #d9534f;
+  color: #d9534f;
+}
+.attachment-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 130px;
+}
+.attachment-size {
+  font-size: 10px;
+  color: var(--muted);
+}
+.attachment-remove {
+  background: none;
+  border: 0;
+  color: var(--muted);
+  padding: 2px;
+  cursor: pointer;
   display: grid;
   place-items: center;
+  border-radius: 4px;
 }
-.send:hover {
-  background: #377c67;
+.attachment-remove:hover {
+  background: var(--border);
+  color: var(--text);
 }
-.send:disabled {
-  opacity: 0.5;
+.spin-icon {
+  animation: spin 1s linear infinite;
+  color: var(--accent);
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.message-attachments-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.message-attachment-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 9px;
+  font-size: 11px;
+}
+.message-attachment-item .att-meta {
+  color: var(--muted);
+  font-size: 10px;
+}
+.message-sources {
+  margin: 10px 0 14px;
+  background: var(--hover);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.sources-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.sources-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.source-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  text-decoration: none;
+  color: var(--text);
+  max-width: 260px;
+  transition: all 0.15s;
+}
+.source-chip:hover {
+  border-color: #286354;
+  color: #286354;
+}
+.source-domain {
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 10px;
+}
+.source-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.source-ext {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.title-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.rename-title-btn {
+  opacity: 0.6;
+  padding: 3px;
+  border-radius: 4px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  color: var(--muted);
+}
+.rename-title-btn:hover {
+  opacity: 1;
+  background: var(--hover);
+  color: var(--text);
+}
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 5px 10px;
+  font-size: 11px;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.action-btn:hover {
+  background: var(--hover);
+  border-color: #8ca493;
+}
+.copy-code-btn {
+  background: none;
+  border: 0;
+  color: inherit;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+.copy-code-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+.code-content {
+  display: flex;
+  overflow-x: auto;
+}
+.code-line-numbers {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 10px 12px 14px;
+  user-select: none;
+  color: #556270;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: right;
+  border-right: 1px solid #242b32;
+}
+.code-content pre {
+  margin: 0;
+  padding: 12px 14px;
+  background: transparent !important;
+  font-size: 12px;
+  line-height: 1.6;
+  flex: 1;
+}
+.code-content code {
+  background: transparent !important;
+  padding: 0 !important;
 }
 .composer-caption {
   display: flex;

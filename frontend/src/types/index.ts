@@ -1,7 +1,7 @@
 import { LucideIcon } from "lucide-react";
-import { Conversation, Message } from "../services/api";
+import { Attachment, Conversation, Message, WebSearchResult } from "../services/api";
 
-export type { Conversation, Message };
+export type { Attachment, Conversation, Message, WebSearchResult };
 
 export interface Suggestion {
   icon: LucideIcon;

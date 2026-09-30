@@ -1,9 +1,34 @@
+export type Attachment = {
+  id: string;
+  conversation_id: string;
+  message_id?: number | null;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  page_count?: number;
+  is_image?: boolean;
+  created_at: string;
+  progress?: number;
+  uploading?: boolean;
+  error?: string;
+};
+
+export type WebSearchResult = {
+  title: string;
+  url: string;
+  snippet: string;
+};
+
 export type Message = {
   id: number;
   role: "user" | "assistant";
   content: string;
   status: string;
   model?: string;
+  attachments?: Attachment[];
+  sources?: WebSearchResult[];
+  web_search?: boolean;
+  created_at?: string;
 };
 
 export type Conversation = {
@@ -12,7 +37,59 @@ export type Conversation = {
   created_at: string;
   updated_at: string;
   messages?: Message[];
+  pending_attachments?: Attachment[];
 };
+
+export async function uploadAttachment(
+  cid: string,
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<Attachment> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const formData = new FormData();
+    formData.append("file", file);
+
+    xhr.open("POST", `/api/conversations/${cid}/attachments`);
+
+    if (xhr.upload && onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          onProgress(Math.round((e.loaded / e.total) * 100));
+        }
+      };
+    }
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          resolve(JSON.parse(xhr.responseText));
+        } catch {
+          reject(new Error("Invalid server response format."));
+        }
+      } else {
+        try {
+          const err = JSON.parse(xhr.responseText);
+          reject(new Error(err.detail || "Upload failed."));
+        } catch {
+          reject(new Error(`Upload failed with status ${xhr.status}.`));
+        }
+      }
+    };
+
+    xhr.onerror = () => reject(new Error("Network error during file upload."));
+    xhr.send(formData);
+  });
+}
+
+export async function deleteAttachment(
+  cid: string,
+  attachmentId: string,
+): Promise<void> {
+  await api(`/conversations/${cid}/attachments/${attachmentId}`, {
+    method: "DELETE",
+  });
+}
 
 export async function api<T>(
   path: string,
@@ -20,9 +97,12 @@ export async function api<T>(
 ): Promise<T> {
   let response: Response;
   try {
+    const isFormData = options.body instanceof FormData;
     response = await fetch("/api" + path, {
       ...options,
-      headers: { "Content-Type": "application/json", ...options.headers },
+      headers: isFormData
+        ? options.headers
+        : { "Content-Type": "application/json", ...options.headers },
     });
   } catch {
     throw new Error(

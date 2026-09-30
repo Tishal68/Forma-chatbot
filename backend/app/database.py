@@ -30,11 +30,39 @@ def initialize():
         CREATE TABLE IF NOT EXISTS conversations (
           id TEXT PRIMARY KEY, title TEXT NOT NULL, created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL, summary TEXT NOT NULL DEFAULT '', summary_through INTEGER NOT NULL DEFAULT 0);
+
         CREATE TABLE IF NOT EXISTS messages (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
           role TEXT NOT NULL CHECK(role IN ('user','assistant')),
           content TEXT NOT NULL, created_at TEXT NOT NULL,
-          status TEXT NOT NULL DEFAULT 'complete', model TEXT);
+          status TEXT NOT NULL DEFAULT 'complete', model TEXT,
+          sources TEXT,
+          web_search INTEGER DEFAULT 0);
+
         CREATE INDEX IF NOT EXISTS messages_conversation ON messages(conversation_id, id);
+
+        CREATE TABLE IF NOT EXISTS attachments (
+          id TEXT PRIMARY KEY,
+          conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+          message_id INTEGER REFERENCES messages(id) ON DELETE SET NULL,
+          filename TEXT NOT NULL,
+          content_type TEXT NOT NULL,
+          size_bytes INTEGER NOT NULL,
+          file_path TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          extracted_text TEXT,
+          page_count INTEGER DEFAULT 0,
+          is_image INTEGER DEFAULT 0);
+
+        CREATE INDEX IF NOT EXISTS attachments_conv ON attachments(conversation_id);
+        CREATE INDEX IF NOT EXISTS attachments_msg ON attachments(message_id);
         ''')
+
+        # Safely migrate existing tables if columns are missing
+        msg_columns = [r['name'] for r in db.execute('PRAGMA table_info(messages)').fetchall()]
+        if 'sources' not in msg_columns:
+            db.execute('ALTER TABLE messages ADD COLUMN sources TEXT')
+        if 'web_search' not in msg_columns:
+            db.execute('ALTER TABLE messages ADD COLUMN web_search INTEGER DEFAULT 0')
+

@@ -1,5 +1,19 @@
-import React from "react";
-import { ArrowDown, ArrowUp, Square, X } from "lucide-react";
+import React, { useRef, useState } from "react";
+import {
+  ArrowDown,
+  Code2,
+  File,
+  FileText,
+  Globe,
+  Image as ImageIcon,
+  Loader2,
+  Paperclip,
+  Send,
+  SlidersHorizontal,
+  Square,
+  X,
+} from "lucide-react";
+import { Attachment } from "../types";
 
 interface ComposerProps {
   ready: boolean;
@@ -22,6 +36,31 @@ interface ComposerProps {
   onSend: () => void;
   onStop: () => void;
   textareaRef: React.RefObject<HTMLTextAreaElement>;
+  attachments: Attachment[];
+  onAttachFiles: (files: FileList | File[]) => void;
+  onRemoveAttachment: (id: string) => void;
+  webSearch: boolean;
+  onToggleWebSearch: () => void;
+  onOpenSettings: () => void;
+}
+
+function formatBytes(bytes: number): string {
+  if (!bytes || isNaN(bytes)) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function getFileIcon(att: Attachment) {
+  if (att.is_image) return <ImageIcon size={15} />;
+  const ext = att.filename.split(".").pop()?.toLowerCase() || "";
+  if (["py", "js", "ts", "tsx", "jsx", "html", "css", "json", "rs", "go", "c", "cpp", "java", "sql", "sh"].includes(ext)) {
+    return <Code2 size={15} />;
+  }
+  if (["pdf", "docx", "txt", "md", "csv"].includes(ext)) {
+    return <FileText size={15} />;
+  }
+  return <File size={15} />;
 }
 
 export function Composer({
@@ -45,7 +84,40 @@ export function Composer({
   onSend,
   onStop,
   textareaRef,
+  attachments,
+  onAttachFiles,
+  onRemoveAttachment,
+  webSearch,
+  onToggleWebSearch,
+  onOpenSettings,
 }: ComposerProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  const hasUploading = attachments.some((a) => a.uploading);
+  const canSend = (input.trim() || attachments.length > 0) && !loading && !busy && ready && !hasUploading;
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!dragOver) setDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      onAttachFiles(e.dataTransfer.files);
+    }
+  };
+
   return (
     <div className="composer-area">
       {!ready && (
@@ -112,17 +184,68 @@ export function Composer({
       )}
 
       <form
-        className="composer"
+        className={`composer ${dragOver ? "drag-over" : ""}`}
         onSubmit={(e) => {
           e.preventDefault();
-          onSend();
+          if (canSend) onSend();
         }}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
       >
+        {/* Hidden file input for attachment picker */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          multiple
+          style={{ display: "none" }}
+          accept=".pdf,.docx,.txt,.md,.markdown,.csv,.py,.js,.ts,.tsx,.jsx,.html,.css,.json,.yaml,.yml,.sh,.c,.cpp,.h,.hpp,.rs,.go,.java,.rb,.php,.sql,.xml,.env,.log,.png,.jpg,.jpeg,.webp,.gif"
+          onChange={(e) => {
+            if (e.target.files && e.target.files.length > 0) {
+              onAttachFiles(e.target.files);
+              e.target.value = "";
+            }
+          }}
+        />
+
+        {/* Attachment preview tray */}
+        {attachments.length > 0 && (
+          <div className="composer-attachments">
+            {attachments.map((att) => (
+              <div
+                key={att.id}
+                className={`attachment-chip ${att.uploading ? "uploading" : ""} ${att.error ? "has-error" : ""}`}
+                title={att.error || `${att.filename} (${formatBytes(att.size_bytes)})`}
+              >
+                <span className="attachment-icon">{getFileIcon(att)}</span>
+                <span className="attachment-name">{att.filename}</span>
+                <span className="attachment-size">
+                  {att.uploading
+                    ? `${att.progress ?? 0}%`
+                    : formatBytes(att.size_bytes)}
+                </span>
+                {att.uploading ? (
+                  <Loader2 size={13} className="spin-icon" />
+                ) : (
+                  <button
+                    type="button"
+                    className="attachment-remove"
+                    aria-label={`Remove ${att.filename}`}
+                    onClick={() => onRemoveAttachment(att.id)}
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
         <textarea
           ref={textareaRef}
           aria-label="Message Forma"
           rows={1}
-          placeholder="Message Forma…"
+          placeholder={dragOver ? "Drop files to attach…" : "Message Forma…"}
           value={input}
           disabled={loading}
           onChange={(e) => onInputChange(e.target.value)}
@@ -133,41 +256,77 @@ export function Composer({
               !e.nativeEvent.isComposing
             ) {
               e.preventDefault();
-              onSend();
+              if (canSend) onSend();
             }
           }}
         />
+
         <div className="composer-bottom">
-          <span>
-            <span className="mini-mark">✳</span>{" "}
-            {busy
-              ? "Working on your answer…"
-              : "Your conversation is saved automatically"}
-          </span>
-          {busy ? (
+          <div className="composer-tools">
             <button
               type="button"
-              className="send stop"
-              onClick={onStop}
-              title="Stop generation"
-              aria-label="Stop generation"
+              className="tool-button"
+              aria-label="Attach files (PDF, DOCX, CSV, TXT, Code, Images)"
+              title="Attach files (PDF, DOCX, CSV, TXT, Code, Images)"
+              onClick={() => fileInputRef.current?.click()}
             >
-              <Square size={16} fill="currentColor" />
-              <span>Stop</span>
+              <Paperclip size={18} />
             </button>
-          ) : (
+
             <button
-              className="send"
-              disabled={!input.trim() || loading || !ready}
-              title="Send message"
-              aria-label="Send message"
+              type="button"
+              className={`tool-button ${webSearch ? "active" : ""}`}
+              aria-label={webSearch ? "Web search: Enabled (Click to disable)" : "Web search: Disabled (Click to enable)"}
+              title={webSearch ? "Web search: ON (Real internet search)" : "Web search: OFF (Click to enable)"}
+              onClick={onToggleWebSearch}
             >
-              <span>Send</span>
-              <ArrowUp size={18} />
+              <Globe size={18} />
+              {webSearch && <span className="active-dot" />}
             </button>
-          )}
+
+            <button
+              type="button"
+              className="tool-button"
+              aria-label="Adjust parameters & settings"
+              title="Parameters (Creativity, model, settings)"
+              onClick={onOpenSettings}
+            >
+              <SlidersHorizontal size={18} />
+            </button>
+          </div>
+
+          <div className="composer-actions">
+            <span className="send-hint">
+              <span>⌘</span> Enter to send
+            </span>
+
+            {busy ? (
+              <button
+                type="button"
+                className="send stop"
+                onClick={onStop}
+                title="Stop generation"
+                aria-label="Stop generation"
+              >
+                <Square size={15} fill="currentColor" />
+                <span>Stop</span>
+              </button>
+            ) : (
+              <button
+                type="submit"
+                className="send primary-send"
+                disabled={!canSend}
+                title="Send message"
+                aria-label="Send message"
+              >
+                <Send size={15} />
+                <span>Send</span>
+              </button>
+            )}
+          </div>
         </div>
       </form>
+
       <p className="composer-caption">
         AI can make mistakes. Check important information.
         <span>Enter to send · Shift + Enter for a new line</span>

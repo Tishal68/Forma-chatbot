@@ -3,7 +3,9 @@ import {
   Conversation,
   Message as MessageType,
   api,
+  deleteAttachment,
   streamChat,
+  uploadAttachment,
 } from "./services/api";
 import { Message } from "./components/Message";
 import { Sidebar } from "./components/Sidebar";
@@ -67,6 +69,10 @@ export function App() {
     const num = saved ? Number(saved) : 0.7;
     return isNaN(num) ? 0.7 : Math.min(Math.max(num, 0), 2);
   });
+  const [attachments, setAttachments] = useState<import("./types").Attachment[]>([]);
+  const [webSearch, setWebSearch] = useState(() => {
+    return localStorage.getItem("forma-web-search") === "true";
+  });
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -102,6 +108,10 @@ export function App() {
     provider === "ollama"
       ? connected && models.includes(model)
       : currentProviderHasKey && models.length > 0;
+
+  useEffect(() => {
+    localStorage.setItem("forma-web-search", String(webSearch));
+  }, [webSearch]);
 
   const refresh = useCallback(async () => {
     const version = ++searchVersion.current;
@@ -158,12 +168,74 @@ export function App() {
     loadModels(provider, key);
   };
 
+  const handleAttachFiles = async (files: FileList | File[]) => {
+    const fileArray = Array.from(files);
+    if (fileArray.length === 0) return;
+
+    let cid = id;
+    if (!cid) {
+      try {
+        const chat = await api<Conversation>("/conversations", { method: "POST" });
+        cid = chat.id;
+        setId(cid);
+        refresh();
+      } catch (e) {
+        setError((e as Error).message || "Failed to initialize conversation for upload.");
+        return;
+      }
+    }
+
+    for (const file of fileArray) {
+      const tempId = "temp-" + Math.random().toString(36).slice(2);
+      const pending: import("./types").Attachment = {
+        id: tempId,
+        conversation_id: cid,
+        filename: file.name,
+        content_type: file.type || "application/octet-stream",
+        size_bytes: file.size,
+        created_at: new Date().toISOString(),
+        uploading: true,
+        progress: 0,
+        is_image: file.type.startsWith("image/"),
+      };
+
+      setAttachments((prev) => [...prev, pending]);
+
+      try {
+        const uploaded = await uploadAttachment(cid, file, (percent: number) => {
+          setAttachments((prev) =>
+            prev.map((a) => (a.id === tempId ? { ...a, progress: percent } : a)),
+          );
+        });
+        setAttachments((prev) =>
+          prev.map((a) => (a.id === tempId ? { ...uploaded, uploading: false } : a)),
+        );
+      } catch (e) {
+        const errDetail = (e as Error).message || "Upload failed";
+        setError(errDetail);
+        setAttachments((prev) => prev.filter((a) => a.id !== tempId));
+      }
+    }
+  };
+
+  const handleRemoveAttachment = async (attachmentId: string) => {
+    setAttachments((prev) => prev.filter((a) => a.id !== attachmentId));
+    if (id && !attachmentId.startsWith("temp-")) {
+      try {
+        await deleteAttachment(id, attachmentId);
+      } catch {
+        // Ignored
+      }
+    }
+  };
+
   const open = useCallback(async (chat: Conversation) => {
     if (locked.current) return;
     const version = ++loadVersion.current;
     setLoading(true);
     setId(chat.id);
     setInput("");
+    setAttachments([]);
     setEdit(null);
     setError("");
     if (window.innerWidth <= 800) setSidebar(false);
@@ -171,6 +243,9 @@ export function App() {
       const data = await api<Conversation>("/conversations/" + chat.id);
       if (version === loadVersion.current) {
         setMessages(data.messages || []);
+        if (data.pending_attachments) {
+          setAttachments(data.pending_attachments);
+        }
         setAtBottom(true);
       }
     } catch (e) {
@@ -178,6 +253,7 @@ export function App() {
       if (version === loadVersion.current) {
         setId(null);
         setMessages([]);
+        setAttachments([]);
       }
     } finally {
       if (version === loadVersion.current) setLoading(false);
@@ -190,6 +266,7 @@ export function App() {
     setLoading(false);
     setId(null);
     setMessages([]);
+    setAttachments([]);
     setInput("");
     setEdit(null);
     setError("");
@@ -309,7 +386,8 @@ export function App() {
       setSettings(true);
       return;
     }
-    if (locked.current || loading || (!regenerate && !input.trim())) return;
+    const canSend = regenerate || input.trim() || attachments.length > 0;
+    if (locked.current || loading || !canSend) return;
     locked.current = true;
     setBusy(true);
     setError("");
@@ -317,6 +395,8 @@ export function App() {
     setAtBottom(true);
 
     const content = input;
+    const currentAttachments = [...attachments];
+    const currentWebSearch = webSearch;
     let cid = id;
     const abort = new AbortController();
     controller.current = abort;
@@ -351,6 +431,8 @@ export function App() {
                   role: "user" as const,
                   content,
                   status: "complete",
+                  attachments: currentAttachments,
+                  web_search: currentWebSearch,
                 },
               ]
             : []),
@@ -365,6 +447,8 @@ export function App() {
       });
 
       setInput("");
+      setAttachments([]);
+
       await streamChat(
         {
           conversation_id: cid,
@@ -375,6 +459,8 @@ export function App() {
           temperature,
           regenerate,
           edit_message_id: edit,
+          attachment_ids: currentAttachments.map((a) => a.id),
+          web_search: currentWebSearch,
         },
         abort.signal,
         (event) => {
@@ -385,6 +471,13 @@ export function App() {
               old.map((m) => (m.id === oldId ? { ...m, id: assistantId } : m)),
             );
             setStatus("Thinking…");
+          }
+          if (event.type === "sources") {
+            setMessages((old) =>
+              old.map((m) =>
+                m.id === assistantId ? { ...m, sources: event.sources } : m,
+              ),
+            );
           }
           if (event.type === "status") setStatus(event.message);
           if (event.type === "token") {
@@ -407,7 +500,10 @@ export function App() {
     } catch (e) {
       if ((e as Error).name !== "AbortError") {
         setError((e as Error).message || "Network interrupted. Try again.");
-        if (!regenerate) setInput(content);
+        if (!regenerate) {
+          setInput(content);
+          setAttachments(currentAttachments);
+        }
       }
     } finally {
       if (frame) cancelAnimationFrame(frame);
@@ -503,6 +599,10 @@ export function App() {
           busy={busy}
           onModelChange={setModel}
           onNewChat={newChat}
+          onRename={() => {
+            const chat = chats.find((c) => c.id === id);
+            if (chat) renameChat(chat);
+          }}
         />
 
         <div
@@ -575,6 +675,12 @@ export function App() {
           onSend={() => send()}
           onStop={stop}
           textareaRef={textarea}
+          attachments={attachments}
+          onAttachFiles={handleAttachFiles}
+          onRemoveAttachment={handleRemoveAttachment}
+          webSearch={webSearch}
+          onToggleWebSearch={() => setWebSearch(!webSearch)}
+          onOpenSettings={() => setSettings(true)}
         />
       </main>
 
