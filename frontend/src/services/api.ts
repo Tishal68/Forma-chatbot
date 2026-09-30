@@ -5,6 +5,7 @@ export type Message = {
   status: string;
   model?: string;
 };
+
 export type Conversation = {
   id: string;
   title: string;
@@ -12,6 +13,7 @@ export type Conversation = {
   updated_at: string;
   messages?: Message[];
 };
+
 export async function api<T>(
   path: string,
   options: RequestInit = {},
@@ -37,6 +39,7 @@ export async function api<T>(
   }
   return response.json();
 }
+
 export async function streamChat(
   body: unknown,
   signal: AbortSignal,
@@ -48,37 +51,60 @@ export async function streamChat(
     body: JSON.stringify(body),
     signal,
   });
+
   if (!response.ok) {
-    const data = await response.json();
+    const data = await response.json().catch(() => ({}));
     throw new Error(
       typeof data.detail === "string" ? data.detail : "Unable to send message.",
     );
   }
-  if (!response.body)
+
+  if (!response.body) {
     throw new Error("Streaming is unavailable in this browser.");
-  const reader = response.body.getReader(),
-    decoder = new TextDecoder();
-  let buffer = "",
-    doneEvent = false;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let doneEvent = false;
+
   try {
     while (true) {
       const { value, done } = await reader.read();
-      buffer += decoder.decode(value, { stream: !done });
-      const frames = buffer.split("\n\n");
-      buffer = frames.pop()!;
+      if (value) {
+        buffer += decoder.decode(value, { stream: !done });
+      }
+      if (done) {
+        buffer += decoder.decode();
+      }
+
+      const frames = buffer.split(/\r?\n\r?\n/);
+      buffer = frames.pop() || "";
+
       for (const frame of frames) {
-        if (frame.startsWith("data: ")) {
-          const event = JSON.parse(frame.slice(6));
-          if (event.type === "done") doneEvent = true;
-          receive(event);
+        const trimmed = frame.trim();
+        if (trimmed.startsWith("data: ")) {
+          try {
+            const event = JSON.parse(trimmed.slice(6));
+            if (event.type === "done") {
+              doneEvent = true;
+            }
+            receive(event);
+          } catch {
+            // Ignore incomplete frames or heartbeat comments
+          }
         }
       }
+
       if (done) break;
     }
-    if (!doneEvent)
+
+    // Do not throw an interruption error if the user deliberately aborted
+    if (!doneEvent && !signal.aborted) {
       throw new Error(
         "Connection interrupted. Your saved response is available; try regenerating.",
       );
+    }
   } finally {
     reader.releaseLock();
   }

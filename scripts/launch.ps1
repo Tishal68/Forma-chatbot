@@ -1,6 +1,7 @@
 param([switch]$NoBrowser)
 $ErrorActionPreference = 'Stop'
-Set-Location $PSScriptRoot
+$repoRoot = Split-Path -Parent $PSScriptRoot
+Set-Location $repoRoot
 $appUrl = 'http://127.0.0.1:8000'
 function Test-Forma {
     try {
@@ -32,9 +33,9 @@ catch {
     $ollamaCommand = Get-Command ollama -ErrorAction SilentlyContinue
     if ($ollamaCommand) { Start-Process -FilePath $ollamaCommand.Source -ArgumentList 'serve' -WindowStyle Hidden }
 }
-$logDirectory = Join-Path $PSScriptRoot 'data'
+$logDirectory = Join-Path $repoRoot 'data'
 $null = New-Item -ItemType Directory -Path $logDirectory -Force
-$serverProcess = Start-Process -FilePath (Join-Path $PSScriptRoot '.venv/Scripts/python.exe') -ArgumentList '-m','uvicorn','app.main:app','--app-dir','backend','--host','127.0.0.1','--port','8000' -WorkingDirectory $PSScriptRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $logDirectory 'server.log') -RedirectStandardError (Join-Path $logDirectory 'server-error.log') -PassThru
+$serverProcess = Start-Process -FilePath (Join-Path $repoRoot '.venv/Scripts/python.exe') -ArgumentList '-m','uvicorn','app.main:app','--app-dir','backend','--host','127.0.0.1','--port','8000' -WorkingDirectory $repoRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $logDirectory 'server.log') -RedirectStandardError (Join-Path $logDirectory 'server-error.log') -PassThru
 for ($attempt = 0; $attempt -lt 30; $attempt++) {
     if (Test-Forma) {
         $serverProcess.Id | Set-Content (Join-Path $logDirectory 'server.pid')

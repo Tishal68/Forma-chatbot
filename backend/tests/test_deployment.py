@@ -20,6 +20,10 @@ def test_production_access_and_health(production):
     response=production.get('/api/conversations',auth=('test-owner','test-only-long-password'))
     assert response.status_code==200
     assert response.headers['Cache-Control']=='no-store'
+    assert response.headers['Strict-Transport-Security'] == 'max-age=31536000; includeSubDomains; preload'
+    assert 'default-src' in response.headers['Content-Security-Policy']
+    assert response.headers['X-Frame-Options'] == 'DENY'
+    assert response.headers['X-Content-Type-Options'] == 'nosniff'
 
 def test_hosted_origin(production,monkeypatch):
     auth=('test-owner','test-only-long-password')

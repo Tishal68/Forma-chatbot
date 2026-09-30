@@ -36,7 +36,7 @@ function CopyButton({
   );
 }
 function plain(node: any): string {
-  if (typeof node === "string") return node;
+  if (typeof node === "string" || typeof node === "number") return String(node);
   if (Array.isArray(node)) return node.map(plain).join("");
   if (isValidElement(node)) return plain((node.props as any).children);
   return "";

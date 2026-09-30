@@ -76,7 +76,7 @@ test("local Ollama chat, context, persistence, actions, themes and mobile", asyn
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.getByRole("button", { name: "Close settings" }).click();
   await page.screenshot({
-    path: "../../../work/chat-dark.png",
+    path: "test-results/chat-dark.png",
     fullPage: true,
   });
   await page.getByRole("button", { name: "Settings", exact: false }).click();
@@ -89,7 +89,7 @@ test("local Ollama chat, context, persistence, actions, themes and mobile", asyn
     page.getByRole("heading", { name: "How can I help you today?" }),
   ).toBeVisible();
   await page.screenshot({
-    path: "../../../work/welcome-desktop.png",
+    path: "test-results/welcome-desktop.png",
     fullPage: true,
   });
   await page
@@ -109,7 +109,7 @@ test("local Ollama chat, context, persistence, actions, themes and mobile", asyn
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("button", { name: "Collapse sidebar" }).click();
   await page.screenshot({
-    path: "../../../work/chat-mobile.png",
+    path: "test-results/chat-mobile.png",
     fullPage: true,
   });
   expect(

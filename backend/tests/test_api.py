@@ -74,3 +74,52 @@ def test_summary_bounded(monkeypatch):
 
 def test_origin_guard(client):
     assert client.post('/api/conversations',headers={'origin':'https://untrusted.example'}).status_code==403
+
+
+def test_cloud_providers_and_streaming(client, monkeypatch):
+    # Test listing models for Groq
+    res = client.get('/api/models?provider=groq')
+    assert res.status_code == 200
+    data = res.json()
+    assert 'openai/gpt-oss-120b' in data['models']
+    assert data['provider'] == 'groq'
+
+    # Test missing API key validation
+    monkeypatch.delenv('GROQ_API_KEY', raising=False)
+    cid = client.post('/api/conversations').json()['id']
+    err_res = client.post('/api/chat', json={
+        'conversation_id': cid,
+        'content': 'Hello',
+        'provider': 'groq',
+    })
+    assert err_res.status_code == 400
+    assert 'API key' in err_res.json()['detail']
+
+    # Test OpenAI-compatible streaming
+    def openai_handler(request):
+        # OpenAI SSE format
+        body = json.loads(request.content)
+        assert body['model'] == 'openai/gpt-oss-120b'
+        stream_chunks = [
+            'data: {"choices": [{"delta": {"content": "Fast "}}]}\n\n',
+            'data: {"choices": [{"delta": {"content": "intelligence!"}}]}\n\n',
+            'data: [DONE]\n\n',
+        ]
+        return httpx.Response(200, content=''.join(stream_chunks))
+
+    monkeypatch.setattr(
+        main,
+        'client',
+        lambda *args, **kwargs: httpx.AsyncClient(base_url='https://api.groq.com/openai/v1', transport=httpx.MockTransport(openai_handler)),
+    )
+
+    stream_res = client.post('/api/chat', json={
+        'conversation_id': cid,
+        'content': 'Explain fast AI',
+        'provider': 'groq',
+        'api_key': 'gsk_testkey',
+    })
+    assert stream_res.status_code == 200
+    assert 'Fast ' in stream_res.text
+    assert 'intelligence!' in stream_res.text
+

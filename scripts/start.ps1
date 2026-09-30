@@ -1,5 +1,6 @@
 $ErrorActionPreference = 'Stop'
-Set-Location $PSScriptRoot
+$repoRoot = Split-Path -Parent $PSScriptRoot
+Set-Location $repoRoot
 if (-not (Test-Path '.venv/Scripts/python.exe')) {
     throw 'Set up the Python environment first. See README.md.'
 }
