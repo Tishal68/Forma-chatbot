@@ -1,0 +1,36 @@
+name: Build and test
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: pip install -r backend/requirements-lock.txt
+      - run: python -m pytest -q
+      - run: npm ci && npm run build
+        working-directory: frontend
+      - run: docker build -t forma:test .
+      - name: Smoke-test production container
+        run: |
+          docker run -d --name forma -p 8000:8000 -e AUTH_USERNAME=ci -e AUTH_PASSWORD=ci-only-test-password -e OLLAMA_BASE_URL=http://unavailable:11434 forma:test
+          trap 'docker logs forma; docker rm -f forma' EXIT
+          for i in $(seq 1 30); do
+            if curl --fail -s http://localhost:8000/api/health; then break; fi
+            sleep 2
+          done
+          curl --fail http://localhost:8000/api/health
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/)" = '401'
+          curl --fail -u ci:ci-only-test-password http://localhost:8000/ | grep 'Forma'

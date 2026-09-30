@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: forma-chatbot
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    disk:
+      name: forma-history
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_PATH
+        value: /var/data/chat.db
+      - key: AUTH_USERNAME
+        sync: false
+      - key: AUTH_PASSWORD
+        generateValue: true
+      - key: OLLAMA_BASE_URL
+        sync: false
+      - key: OLLAMA_MODEL
+        value: llama3.2
+      - key: OLLAMA_API_KEY
+        sync: false
