@@ -43,8 +43,15 @@ async def lifespan(app: FastAPI):
             raise RuntimeError(
                 'Production requires AUTH_USERNAME and AUTH_PASSWORD (at least 16 characters).'
             )
-        if not os.getenv('OLLAMA_BASE_URL'):
-            raise RuntimeError('Production requires an explicit reachable OLLAMA_BASE_URL.')
+        has_ollama = bool(os.getenv('OLLAMA_BASE_URL'))
+        has_cloud_keys = any(
+            bool(os.getenv(k))
+            for k in ('GROQ_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'OPENROUTER_API_KEY')
+        )
+        if not has_ollama and not has_cloud_keys:
+            raise RuntimeError(
+                'Production requires either an explicit reachable OLLAMA_BASE_URL or at least one Cloud Provider API Key (GROQ_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY).'
+            )
 
     initialize()
 
