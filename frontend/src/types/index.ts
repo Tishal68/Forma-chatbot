@@ -26,9 +26,13 @@ export interface ModelDetail {
 export interface ProviderInfo {
   id: string;
   name: string;
+  tagline?: string;
+  configured?: boolean;
+  working?: boolean;
+  status?: string;
+  error?: string | null;
   default_model: string;
   key_url?: string;
-  has_key?: boolean;
 }
 
 export interface ModelsResponse {

@@ -154,6 +154,7 @@ def test_web_search_failure_and_sources(client, monkeypatch):
         return httpx.Response(200, content=''.join(stream_chunks))
 
     from backend.app import main
+    monkeypatch.setenv('GROQ_API_KEY', 'gsk_testkey')
     monkeypatch.setattr(
         main,
         'client',
@@ -164,7 +165,6 @@ def test_web_search_failure_and_sources(client, monkeypatch):
         'conversation_id': conv_id,
         'content': 'Where are the docs?',
         'provider': 'groq',
-        'api_key': 'gsk_testkey',
         'web_search': True,
     })
     assert success_res.status_code == 200

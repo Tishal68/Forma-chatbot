@@ -22,11 +22,11 @@ const localWorkspace = ["localhost", "127.0.0.1", "[::1]"].includes(
 );
 
 const defaultProviders: ProviderInfo[] = [
-  { id: "groq", name: "Groq (Lightning Fast)", default_model: "llama-3.3-70b-versatile", key_url: "https://console.groq.com/keys" },
-  { id: "openai", name: "OpenAI", default_model: "gpt-4o-mini", key_url: "https://platform.openai.com/api-keys" },
-  { id: "gemini", name: "Google Gemini", default_model: "gemini-2.0-flash", key_url: "https://aistudio.google.com/app/apikey" },
-  { id: "openrouter", name: "OpenRouter (All Models)", default_model: "meta-llama/llama-3.3-70b-instruct", key_url: "https://openrouter.ai/keys" },
-  { id: "ollama", name: "Ollama (Local Offline)", default_model: "llama3.2", key_url: "https://ollama.com" },
+  { id: "groq", name: "Groq", tagline: "Lightning Fast", default_model: "openai/gpt-oss-120b" },
+  { id: "openrouter", name: "OpenRouter", tagline: "All Frontier Models", default_model: "meta-llama/llama-3.3-70b-instruct" },
+  { id: "openai", name: "OpenAI", tagline: "GPT-4o & Reasoning", default_model: "gpt-4o-mini" },
+  { id: "gemini", name: "Google Gemini", tagline: "Next-Gen Multimodal", default_model: "gemini-2.5-flash" },
+  { id: "ollama", name: "Ollama", tagline: "Local Offline", default_model: "llama3.2" },
 ];
 
 export function App() {
@@ -42,16 +42,9 @@ export function App() {
 
   // Multi-provider state
   const [provider, setProvider] = useState<string>(
-    () => localStorage.getItem("forma-provider") || "openai",
+    () => localStorage.getItem("forma-provider") || "groq",
   );
   const [providers, setProviders] = useState<ProviderInfo[]>(defaultProviders);
-  const [apiKeys, setApiKeys] = useState<Record<string, string>>(() => {
-    try {
-      return JSON.parse(localStorage.getItem("forma-api-keys") || "{}");
-    } catch {
-      return {};
-    }
-  });
 
   const [models, setModels] = useState<string[]>([]);
   const [modelDetails, setModelDetails] = useState<ModelDetail[]>([]);
@@ -101,13 +94,12 @@ export function App() {
   const loadVersion = useRef(0);
   const searchVersion = useRef(0);
 
-  const currentProviderHasKey = Boolean(
-    apiKeys[provider] || providers.find((p) => p.id === provider)?.has_key,
+  const currentProviderInfo = providers.find((p) => p.id === provider);
+  const ready = Boolean(
+    connected &&
+      (currentProviderInfo ? currentProviderInfo.working : true) &&
+      models.includes(model),
   );
-  const ready =
-    provider === "ollama"
-      ? connected && models.includes(model)
-      : currentProviderHasKey && models.length > 0;
 
   useEffect(() => {
     localStorage.setItem("forma-web-search", String(webSearch));
@@ -126,24 +118,29 @@ export function App() {
   }, [search]);
 
   const loadModels = useCallback(
-    async (targetProvider = provider, keyOverride = apiKeys[targetProvider]) => {
+    async (targetProvider?: string, forceRefresh = false) => {
       setChecking(true);
       try {
-        const query = new URLSearchParams({
-          provider: targetProvider,
-          ...(keyOverride ? { api_key: keyOverride } : {}),
-        });
+        const query = new URLSearchParams();
+        if (targetProvider) query.set("provider", targetProvider);
+        if (forceRefresh) query.set("refresh", "true");
+
         const data = await api<ModelsResponse>("/models?" + query.toString());
-        if (data.providers) setProviders(data.providers);
+        if (data.providers && data.providers.length > 0) {
+          setProviders(data.providers);
+        }
+        const activeProvider = data.provider || targetProvider || "groq";
+        setProvider(activeProvider);
         setModels(data.models || []);
         setModelDetails(data.model_details || []);
         setConnected(true);
 
         setModel((old) => {
-          const savedForProvider = localStorage.getItem(`forma-model-${targetProvider}`);
-          const preferred = savedForProvider || old || data.default;
+          const savedForProvider = localStorage.getItem(`forma-model-${activeProvider}`);
+          const preferred =
+            savedForProvider ||
+            (old && data.models.includes(old) ? old : data.default);
           if (data.models.includes(preferred)) return preferred;
-          if (data.models.includes(preferred + ":latest")) return preferred + ":latest";
           return data.models[0] || data.default || "";
         });
       } catch {
@@ -152,20 +149,13 @@ export function App() {
         setChecking(false);
       }
     },
-    [provider, apiKeys],
+    [],
   );
 
   const handleProviderChange = (newProvider: string) => {
     setProvider(newProvider);
     localStorage.setItem("forma-provider", newProvider);
-    loadModels(newProvider, apiKeys[newProvider]);
-  };
-
-  const handleApiKeyChange = (key: string) => {
-    const updated = { ...apiKeys, [provider]: key };
-    setApiKeys(updated);
-    localStorage.setItem("forma-api-keys", JSON.stringify(updated));
-    loadModels(provider, key);
+    loadModels(newProvider);
   };
 
   const handleAttachFiles = async (files: FileList | File[]) => {
@@ -455,7 +445,6 @@ export function App() {
           content,
           model,
           provider,
-          api_key: apiKeys[provider] || undefined,
           temperature,
           regenerate,
           edit_message_id: edit,
@@ -593,6 +582,9 @@ export function App() {
           messagesCount={messages.length}
           title={title}
           ready={ready}
+          provider={provider}
+          providers={providers}
+          onProviderChange={handleProviderChange}
           model={model}
           models={models}
           modelDetails={modelDetails}
@@ -651,7 +643,7 @@ export function App() {
           connected={connected}
           localWorkspace={localWorkspace}
           onOpenHelp={() => setSettings(true)}
-          onCheckConnection={() => loadModels()}
+          onCheckConnection={() => loadModels(provider)}
           atBottom={atBottom}
           messagesCount={messages.length}
           onScrollToBottom={() => {
@@ -694,14 +686,12 @@ export function App() {
         provider={provider}
         providers={providers}
         onProviderChange={handleProviderChange}
-        apiKey={apiKeys[provider] || ""}
-        onApiKeyChange={handleApiKeyChange}
         model={model}
         models={models}
         modelDetails={modelDetails}
         onModelChange={setModel}
         busy={busy}
-        onRefreshModels={() => loadModels()}
+        onRefreshModels={() => loadModels(provider, true)}
         temperature={temperature}
         onTemperatureChange={setTemperature}
         onClearAll={async () => {

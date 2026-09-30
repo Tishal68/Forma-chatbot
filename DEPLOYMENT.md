@@ -2,21 +2,35 @@
 
 The Dockerfile builds React and serves it with FastAPI as **one web service**. No separate frontend deployment or CORS setup is needed. The process listens on the host-provided `PORT` and uses one worker. SQLite requires persistent storage at `/var/data` and one replica.
 
-## Before deploying: connect an AI server
+## Before deploying: AI Providers
 
-The web service does **not** include an Ollama model or run inference itself. Set `OLLAMA_BASE_URL` to an Ollama server reachable **from the hosting provider**, not your laptop's `localhost`. The service must implement Ollama's `/api/tags` and `/api/chat` endpoints. Install your selected model on that server first.
+Forma supports 5 AI inference providers:
+- **Groq** (`GROQ_API_KEY`): Ultra-fast cloud inference (Llama 3.3 70B, DeepSeek R1 Distill). Recommended for quick, free-tier setup.
+- **OpenRouter** (`OPENROUTER_API_KEY`): Unified access to Claude 3.5 Sonnet, DeepSeek R1, Llama 3.3, and more.
+- **Google Gemini** (`GEMINI_API_KEY`): Gemini 2.0 Flash and Gemini 1.5 Pro via Google AI Studio.
+- **OpenAI** (`OPENAI_API_KEY`): GPT-4o, GPT-4o-mini, o3-mini.
+- **Ollama** (`OLLAMA_BASE_URL`): Self-hosted offline inference (e.g. `llama3.2`, `mistral`, `deepseek-r1`). **Ollama is completely optional.**
 
-Options include a separate private Ollama service on a sufficiently provisioned server, or an authenticated HTTPS Ollama-compatible endpoint. Set `OLLAMA_API_KEY` only if the endpoint expects a bearer token; ordinary private-network Ollama needs no key. Do not expose unauthenticated Ollama directly to the public Internet. An OpenAI-only API endpoint is not compatible with this integration.
+At least one provider must be configured for production startup. When deploying to cloud environments like Render or Railway, you do **not** need to run or host an Ollama instance — simply configure one or more cloud API keys (`GROQ_API_KEY`, `OPENROUTER_API_KEY`, etc.) in your environment variables.
 
-The lightweight web container and the AI server have different hardware requirements. Size the AI server for your model. A successful web health check confirms the app/database, **not** AI model connectivity. After deployment, open Settings → Refresh installed models, then send a message to verify the full connection.
+All API keys remain strictly secure on the backend. The frontend queries `/api/models`, which checks server-side environment variables, probes provider health, and presents only configured, operational providers and models in the UI selector.
 
-## Render
+## Render Deployment
 
-1. In Render, choose **New → Blueprint** and connect `Tishal68/Forma-chatbot`.
-2. Render reads `render.yaml`. It provisions a Docker web service and a 1 GB persistent disk. This uses the **paid Starter plan**, because persistent history needs a disk. Review the dashboard cost before deploying.
-3. Supply `AUTH_USERNAME`, a reachable `OLLAMA_BASE_URL`, and `OLLAMA_API_KEY` (leave it blank for an unauthenticated private endpoint). Render generates `AUTH_PASSWORD` automatically; retrieve it from the service's environment settings after creation.
-4. Change `OLLAMA_MODEL` if your AI server uses a different model. Deploy.
-5. Open the provided HTTPS URL. The browser asks for the workspace username/password. Use the environment values from step 3.
+1. In Render, choose **New → Blueprint** and connect `Tishal68/Forma-chatbot` (or fork to your own account).
+2. Render reads `render.yaml`. It provisions a Docker web service and a 1 GB persistent disk for your chat history.
+3. In the Render service settings / environment variables:
+   - Provide `AUTH_USERNAME` (e.g. `admin`).
+   - `AUTH_PASSWORD` is automatically generated (minimum 16 characters); retrieve it from the service dashboard.
+   - Set at least one cloud provider API key, such as:
+     - `GROQ_API_KEY`: Get a free key at [console.groq.com](https://console.groq.com/keys)
+     - `OPENROUTER_API_KEY`: Get a key at [openrouter.ai](https://openrouter.ai/keys)
+     - `GEMINI_API_KEY`: Get a key at [aistudio.google.com](https://aistudio.google.com/app/apikey)
+     - `OPENAI_API_KEY`: Get a key at [platform.openai.com](https://platform.openai.com/api-keys)
+   - Leave `OLLAMA_BASE_URL` blank unless you run a private, reachable Ollama server.
+4. Deploy the service.
+5. Open your service's `https://<service-name>.onrender.com` URL. Sign in with your `AUTH_USERNAME` and generated `AUTH_PASSWORD`.
+6. Forma automatically detects your working cloud provider and selects it by default.
 
 Render's standard public URL is permitted automatically through `RENDER_EXTERNAL_URL`. For a custom domain, set `ALLOWED_ORIGINS=https://chat.your-domain.com` (comma-separate multiple origins, no paths or trailing slash).
 
@@ -32,11 +46,15 @@ APP_ENV=production
 DATABASE_PATH=/var/data/chat.db
 AUTH_USERNAME=your-chosen-username
 AUTH_PASSWORD=replace-with-a-random-password-at-least-16-characters
-OLLAMA_BASE_URL=https://your-reachable-ollama-server.example
-OLLAMA_MODEL=llama3.2
+# Set at least one provider (cloud or Ollama):
+GROQ_API_KEY=gsk_...
+# OPENROUTER_API_KEY=sk-or-...
+# GEMINI_API_KEY=...
+# OPENAI_API_KEY=sk-proj-...
+# OLLAMA_BASE_URL=https://your-reachable-ollama-server.example
 ```
 
-The sample password is a placeholder, not a credential to use. Generate a password locally, for example with `python -c "import secrets; print(secrets.token_urlsafe(32))"`, and paste it into Railway's secret variables. Add `OLLAMA_API_KEY` if needed.
+The sample password is a placeholder, not a credential to use. Generate a password locally, for example with `python -c "import secrets; print(secrets.token_urlsafe(32))"`, and paste it into Railway's secret variables. Add `OLLAMA_API_KEY` if using private Ollama.
 
 5. Generate a public domain under Networking, then deploy. The service reads Railway's `PORT`; do not override the start command.
 6. Sign in at the HTTPS URL and verify model connectivity in Settings.

@@ -1,6 +1,6 @@
 import React from "react";
 import { ChevronDown, PanelLeft, Pencil, Plus } from "lucide-react";
-import { ModelDetail } from "../types";
+import { ModelDetail, ProviderInfo } from "../types";
 
 interface HeaderProps {
   sidebar: boolean;
@@ -8,6 +8,9 @@ interface HeaderProps {
   messagesCount: number;
   title: string;
   ready: boolean;
+  provider: string;
+  providers: ProviderInfo[];
+  onProviderChange: (provider: string) => void;
   model: string;
   models: string[];
   modelDetails?: ModelDetail[];
@@ -23,6 +26,9 @@ export function Header({
   messagesCount,
   title,
   ready,
+  provider,
+  providers,
+  onProviderChange,
   model,
   models,
   modelDetails = [],
@@ -64,7 +70,25 @@ export function Header({
       </div>
 
       <div className="header-right">
-        <div className="model-picker">
+        {providers.length > 0 && (
+          <div className="provider-picker" title="Select AI Provider">
+            <select
+              aria-label="Select provider"
+              value={provider}
+              disabled={busy}
+              onChange={(e) => onProviderChange(e.target.value)}
+            >
+              {providers.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} {!p.working && p.status ? `(${p.status})` : ""}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={14} />
+          </div>
+        )}
+
+        <div className="model-picker" title="Select AI Model">
           <span className={ready ? "connection-dot" : "connection-dot offline"} />
           <select
             aria-label="Select model"

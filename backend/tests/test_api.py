@@ -107,6 +107,7 @@ def test_cloud_providers_and_streaming(client, monkeypatch):
         ]
         return httpx.Response(200, content=''.join(stream_chunks))
 
+    monkeypatch.setenv('GROQ_API_KEY', 'gsk_testkey')
     monkeypatch.setattr(
         main,
         'client',
@@ -117,7 +118,6 @@ def test_cloud_providers_and_streaming(client, monkeypatch):
         'conversation_id': cid,
         'content': 'Explain fast AI',
         'provider': 'groq',
-        'api_key': 'gsk_testkey',
     })
     assert stream_res.status_code == 200
     assert 'Fast ' in stream_res.text

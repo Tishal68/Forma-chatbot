@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
-import { ExternalLink, Eye, EyeOff, Key, RefreshCw, Sparkles, Trash2, X, Zap } from "lucide-react";
+import React, { useEffect, useRef } from "react";
+import { AlertTriangle, CheckCircle2, RefreshCw, Sparkles, Trash2, X } from "lucide-react";
 import { ModelDetail, ProviderInfo } from "../types";
 
 interface SettingsModalProps {
@@ -10,8 +10,6 @@ interface SettingsModalProps {
   provider: string;
   providers: ProviderInfo[];
   onProviderChange: (provider: string) => void;
-  apiKey: string;
-  onApiKeyChange: (key: string) => void;
   model: string;
   models: string[];
   modelDetails: ModelDetail[];
@@ -31,8 +29,6 @@ export function SettingsModal({
   provider,
   providers,
   onProviderChange,
-  apiKey,
-  onApiKeyChange,
   model,
   models,
   modelDetails,
@@ -44,7 +40,6 @@ export function SettingsModal({
   onClearAll,
 }: SettingsModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const [showKey, setShowKey] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -56,7 +51,6 @@ export function SettingsModal({
 
   const currentProviderInfo = providers.find((p) => p.id === provider);
   const currentModelDetail = modelDetails.find((m) => m.id === model);
-  const isCloudProvider = provider !== "ollama";
 
   return (
     <dialog
@@ -69,7 +63,7 @@ export function SettingsModal({
       <div className="modal-header">
         <div>
           <h2>Workspace settings</h2>
-          <p>Configure your AI provider, models, and appearance.</p>
+          <p>Configure your active AI provider, model, and appearance.</p>
         </div>
         <button
           className="icon-button"
@@ -90,60 +84,29 @@ export function SettingsModal({
         >
           {providers.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.name}
+              {p.name} {p.working ? "● Ready" : `(⚠️ ${p.status || "Check server"})`}
             </option>
           ))}
         </select>
       </label>
 
-      {isCloudProvider && (
-        <div className="setting api-key-setting">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
-            <span style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }}>
-              <Key size={15} /> {currentProviderInfo?.name || "Provider"} API Key
-            </span>
-            {currentProviderInfo?.key_url && (
-              <a
-                href={currentProviderInfo.key_url}
-                target="_blank"
-                rel="noreferrer"
-                style={{ fontSize: "12px", display: "flex", alignItems: "center", gap: "4px", color: "var(--accent)" }}
-              >
-                Get API key <ExternalLink size={11} />
-              </a>
-            )}
-          </div>
-          <div style={{ display: "flex", gap: "8px", width: "100%", marginTop: "6px" }}>
-            <input
-              type={showKey ? "text" : "password"}
-              aria-label="API Key"
-              placeholder={`Paste your ${currentProviderInfo?.name || ""} API key…`}
-              value={apiKey}
-              onChange={(e) => onApiKeyChange(e.target.value)}
-              style={{
-                flex: 1,
-                padding: "8px 12px",
-                borderRadius: "6px",
-                border: "1px solid var(--border)",
-                background: "var(--surface)",
-                color: "var(--text)",
-                fontFamily: "monospace",
-                fontSize: "13px",
-              }}
-            />
-            <button
-              type="button"
-              className="quiet"
-              onClick={() => setShowKey(!showKey)}
-              title={showKey ? "Hide key" : "Show key"}
-              style={{ padding: "8px 10px" }}
-            >
-              {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
-          <small style={{ color: "var(--muted)", marginTop: "4px" }}>
-            Stored locally in your browser. Never shared or exposed.
-          </small>
+      {currentProviderInfo && (
+        <div style={{ margin: "-6px 0 14px", padding: "8px 12px", borderRadius: "6px", background: "var(--surface)", border: "1px solid var(--border)", fontSize: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
+          {currentProviderInfo.working ? (
+            <>
+              <CheckCircle2 size={15} style={{ color: "var(--accent)", flexShrink: 0 }} />
+              <span>
+                <strong>{currentProviderInfo.name}</strong> is operational. Credentials are authenticated securely on the backend.
+              </span>
+            </>
+          ) : (
+            <>
+              <AlertTriangle size={15} style={{ color: "#eab308", flexShrink: 0 }} />
+              <span>
+                <strong>{currentProviderInfo.name} status:</strong> {currentProviderInfo.error || "Provider reported an error. Please verify backend environment configuration."}
+              </span>
+            </>
+          )}
         </div>
       )}
 
@@ -174,11 +137,17 @@ export function SettingsModal({
         </div>
       )}
 
-      {provider === "ollama" && (
-        <button className="quiet refresh-models" onClick={onRefreshModels}>
-          <RefreshCw size={14} /> Refresh installed models
+      <div style={{ display: "flex", gap: "8px", marginBottom: "14px" }}>
+        <button
+          type="button"
+          className="quiet refresh-models"
+          onClick={onRefreshModels}
+          disabled={busy}
+          style={{ width: "100%", justifyContent: "center" }}
+        >
+          <RefreshCw size={14} /> Refresh provider & models
         </button>
-      )}
+      </div>
 
       <label className="setting">
         Appearance

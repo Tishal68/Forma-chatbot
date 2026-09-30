@@ -20,7 +20,13 @@ from .config import ROOT, settings
 from .context import build_context
 from .database import connect, initialize
 from .extractors import check_vision_support, extract_file_content, sanitize_filename, validate_file_type
-from .providers import PROVIDERS, get_api_key, get_provider_config
+from .providers import (
+    PROVIDERS,
+    get_api_key,
+    get_provider_config,
+    is_provider_configured,
+    probe_provider_health,
+)
 from .search import SearchError, format_search_context, perform_search
 from .security import apply_security_headers, get_allowed_origins, verify_basic_auth
 
@@ -43,14 +49,11 @@ async def lifespan(app: FastAPI):
             raise RuntimeError(
                 'Production requires AUTH_USERNAME and AUTH_PASSWORD (at least 16 characters).'
             )
-        has_ollama = bool(os.getenv('OLLAMA_BASE_URL'))
-        has_cloud_keys = any(
-            bool(os.getenv(k))
-            for k in ('GROQ_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'OPENROUTER_API_KEY')
-        )
-        if not has_ollama and not has_cloud_keys:
+        configured_any = any(is_provider_configured(p) for p in PROVIDERS)
+        if not configured_any:
             raise RuntimeError(
-                'Production requires either an explicit reachable OLLAMA_BASE_URL or at least one Cloud Provider API Key (GROQ_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY).'
+                'Production requires at least one configured AI provider. '
+                'Set GROQ_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY, OPENAI_API_KEY, or OLLAMA_BASE_URL.'
             )
 
     initialize()
@@ -141,15 +144,19 @@ def assert_conversation_idle(cid: str):
             )
 
 
-def client(provider: str = 'ollama', api_key: str | None = None) -> httpx.AsyncClient:
+def client(provider: str = 'groq') -> httpx.AsyncClient:
     """Create HTTPX async client for Ollama or cloud providers."""
     config = get_provider_config(provider)
-    base_url = config['base_url'].rstrip('/')
-    token = get_api_key(provider, api_key)
+    if provider == 'ollama':
+        base_url = (os.getenv('OLLAMA_BASE_URL') or 'http://localhost:11434').rstrip('/')
+    else:
+        base_url = config['base_url'].rstrip('/')
+
+    token = get_api_key(provider)
     headers = {'Authorization': f'Bearer {token}'} if token else {}
     if provider == 'openrouter':
         headers['HTTP-Referer'] = 'https://forma.local'
-        headers['X-Title'] = 'Forma Workspace'
+        headers['X-Title'] = 'Forma'
     return httpx.AsyncClient(
         base_url=base_url,
         headers=headers,
@@ -157,31 +164,47 @@ def client(provider: str = 'ollama', api_key: str | None = None) -> httpx.AsyncC
     )
 
 
-def format_error_message(exc: Exception, provider: str = 'ollama') -> str:
+def format_error_message(exc: Exception, provider: str = 'groq') -> str:
     config = get_provider_config(provider)
     pname = config['name']
     if isinstance(exc, httpx.ConnectError):
+        if provider == 'ollama':
+            url = os.getenv('OLLAMA_BASE_URL') or 'http://localhost:11434'
+            return f'Unable to connect to Ollama at {url}. Ensure Ollama is running and accessible.'
         return f'Unable to connect to {pname}. Check network connectivity and server status.'
     if isinstance(exc, httpx.TimeoutException):
-        return 'Generation timed out. Try again or choose a faster model.'
+        return f'{pname} generation timed out. Try again or choose a faster model.'
     if isinstance(exc, httpx.HTTPStatusError):
+        status_code = exc.response.status_code
+        err_msg = ""
         try:
             err_json = exc.response.json()
-            err_msg = err_json.get('error', {}).get('message')
-            if err_msg:
-                return f"{pname}: {err_msg}"
+            if isinstance(err_json, dict):
+                err_msg = err_json.get('error', {}).get('message', '') or err_json.get('detail', '')
+            elif isinstance(err_json, list) and err_json and isinstance(err_json[0], dict):
+                err_msg = err_json[0].get('error', {}).get('message', '')
         except Exception:
-            pass
-        if exc.response.status_code == 401:
-            return f'Invalid API key for {pname}. Please check your key in Settings.'
-        if exc.response.status_code == 429:
-            return f'Rate limit or quota exceeded for {pname}. Check your billing or account credits.'
-        if exc.response.status_code == 404:
-            return f'Model not found on {pname}. Please verify the model name or pull it locally.'
-        return f'{pname} returned error: {exc.response.text[:200]}'
+            try:
+                err_msg = exc.response.text[:200]
+            except Exception:
+                err_msg = ""
+
+        if status_code == 401:
+            return f'Invalid or revoked API key for {pname}. Please check {config.get("api_key_env")} in server settings.'
+        if status_code == 429:
+            if 'credit' in err_msg.lower() or 'quota' in err_msg.lower() or 'billing' in err_msg.lower():
+                return f'Quota exceeded for {pname}: You have no credits remaining. Please check your account billing.'
+            return f'Rate limit exceeded for {pname}. Please wait a moment and try again.'
+        if status_code == 404:
+            return f'Model not found on {pname}. {err_msg or "Please select another model in settings."}'
+        if status_code in (502, 503, 504):
+            return f'{pname} is currently experiencing high demand or an outage ({status_code}). Please try again shortly or switch to another provider.'
+        if err_msg:
+            return f'{pname} returned error ({status_code}): {err_msg}'
+        return f'{pname} request failed with status {status_code}.'
     if isinstance(exc, ValueError):
         return str(exc)
-    return f'Generation failed with {pname}. Please check your configuration and try again.'
+    return f'Generation failed with {pname}. Please try again.'
 
 
 # ---------------------------------------------------------------------------
@@ -198,62 +221,72 @@ async def health_check():
 
 
 @app.get('/api/models')
-async def list_models(provider: str = 'ollama', api_key: str | None = None):
-    """List available models for the specified provider (Ollama, Groq, OpenAI, Gemini, OpenRouter)."""
-    p_lower = provider.lower()
-    config = get_provider_config(p_lower)
-    key = get_api_key(p_lower, api_key)
+async def list_models(provider: str | None = None, refresh: bool = False):
+    """
+    List available models and configured providers.
+    Probes provider health so only working, configured providers are presented.
+    """
+    all_configured = [pid for pid in PROVIDERS if is_provider_configured(pid)]
+    if not all_configured:
+        all_configured = ['ollama']
 
-    providers_summary = [
-        {
+    # Probe all configured providers in parallel
+    health_results = await asyncio.gather(
+        *(probe_provider_health(pid, force=refresh) for pid in all_configured)
+    )
+    health_by_pid = {pid: h for pid, h in zip(all_configured, health_results)}
+
+    providers_summary = []
+    working_providers = []
+    for pid in all_configured:
+        pdata = PROVIDERS[pid]
+        h = health_by_pid[pid]
+        if h["working"]:
+            working_providers.append(pid)
+        providers_summary.append({
             "id": pid,
             "name": pdata["name"],
+            "tagline": pdata.get("tagline", ""),
+            "configured": h["configured"],
+            "working": h["working"],
+            "status": h["status"],
+            "error": h["error"],
             "default_model": pdata["default_model"],
             "key_url": pdata.get("key_url", ""),
-            "has_key": bool(get_api_key(pid, api_key if pid == p_lower else None)),
-        }
-        for pid, pdata in PROVIDERS.items()
-    ]
+        })
 
-    if p_lower == 'ollama':
-        try:
-            try:
-                c_cm = client('ollama', key)
-            except TypeError:
-                c_cm = client()
-            async with c_cm as c:
-                response = await c.get('/api/tags')
-                response.raise_for_status()
-            installed = [m['name'] for m in response.json().get('models', [])]
-            return {
-                'provider': 'ollama',
-                'providers': providers_summary,
-                'models': installed if installed else [settings.OLLAMA_MODEL],
-                'model_details': [
-                    {"id": m, "name": m, "badge": "🖥️ Local", "description": "Local offline model"}
-                    for m in installed
-                ],
-                'default': settings.OLLAMA_MODEL if settings.OLLAMA_MODEL in installed else (installed[0] if installed else settings.OLLAMA_MODEL),
-            }
-        except Exception:
-            return {
-                'provider': 'ollama',
-                'providers': providers_summary,
-                'models': [settings.OLLAMA_MODEL],
-                'model_details': [
-                    {"id": settings.OLLAMA_MODEL, "name": settings.OLLAMA_MODEL, "badge": "🖥️ Local", "description": "Local model"}
-                ],
-                'default': settings.OLLAMA_MODEL,
-            }
+    # Pick active provider: requested if configured, else first working, else first configured
+    req_p = (provider or "").lower().strip()
+    if req_p in all_configured:
+        active_p = req_p
+    elif working_providers:
+        active_p = working_providers[0]
+    else:
+        active_p = all_configured[0]
 
-    curated = config.get("models", [])
-    model_ids = [m["id"] for m in curated]
+    pconfig = PROVIDERS[active_p]
+    phealth = health_by_pid.get(active_p, {})
+
+    if active_p == 'ollama':
+        installed = phealth.get('models', [])
+        models = installed if installed else [settings.OLLAMA_MODEL]
+        details = [
+            {"id": m, "name": m, "badge": "🖥️ Local", "description": "Local offline model"}
+            for m in models
+        ]
+        default_m = settings.OLLAMA_MODEL if settings.OLLAMA_MODEL in models else (models[0] if models else settings.OLLAMA_MODEL)
+    else:
+        curated = pconfig.get("models", [])
+        models = [m["id"] for m in curated]
+        details = curated
+        default_m = pconfig["default_model"]
+
     return {
-        'provider': p_lower,
-        'providers': providers_summary,
-        'models': model_ids,
-        'model_details': curated,
-        'default': config["default_model"],
+        "provider": active_p,
+        "providers": providers_summary,
+        "models": models,
+        "model_details": details,
+        "default": default_m,
     }
 
 
@@ -548,15 +581,25 @@ async def stream_chat_response(body: ChatPayload):
     if not body.regenerate and not body.content.strip() and not attachments:
         raise HTTPException(status_code=422, detail='Write a message or attach a file first.')
 
-    provider = (body.provider or 'ollama').lower()
-    pconfig = get_provider_config(provider)
-    api_key = get_api_key(provider, body.api_key)
+    provider = (body.provider or '').lower().strip()
+    if not provider:
+        configured = [p for p in PROVIDERS if is_provider_configured(p)]
+        provider = configured[0] if configured else 'groq'
 
-    if provider != 'ollama' and not api_key:
+    pconfig = get_provider_config(provider)
+    if not is_provider_configured(provider):
         raise HTTPException(
             status_code=400,
-            detail=f"Please enter your {pconfig['name']} API key in Settings or set {pconfig.get('api_key_env')} in .env.",
+            detail=f"{pconfig['name']} is not configured on this server. Set the {pconfig.get('api_key_env')} API key in server environment variables.",
         )
+
+    if provider != 'ollama':
+        api_key = get_api_key(provider)
+        if not api_key:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Missing API key for {pconfig['name']}. Set {pconfig.get('api_key_env')} in server environment variables.",
+            )
 
     model = body.model or pconfig['default_model']
 
@@ -688,8 +731,9 @@ async def stream_chat_response(body: ChatPayload):
                 await emit('sources', sources=search_results)
 
             try:
-                client_instance = client(provider, api_key)
-            except TypeError:
+                client_instance = client(provider)
+            except Exception as e:
+                log.exception("Failed to initialize client for %s: %s", provider, e)
                 client_instance = client()
 
             async with client_instance as c:
@@ -736,6 +780,8 @@ async def stream_chat_response(body: ChatPayload):
                             'temperature': body.temperature,
                         },
                     ) as response:
+                        if response.status_code >= 400:
+                            await response.aread()
                         response.raise_for_status()
                         async for line in response.aiter_lines():
                             if not line:
@@ -777,6 +823,8 @@ async def stream_chat_response(body: ChatPayload):
                             },
                         },
                     ) as response:
+                        if response.status_code >= 400:
+                            await response.aread()
                         response.raise_for_status()
                         async for line in response.aiter_lines():
                             if not line:

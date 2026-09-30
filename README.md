@@ -21,11 +21,11 @@ Experience instant token streaming (300+ tokens/sec on Groq), frontier reasoning
   - **Google Gemini**: Gemini 2.0 Flash, Gemini 1.5 Pro.
   - **OpenRouter**: Claude 3.5 Sonnet, DeepSeek R1, Llama 3.3 70B.
   - **Ollama**: Local offline models (`llama3.2`, `deepseek-r1`, `qwen2.5`, `mistral`).
-- **🔑 Direct In-App API Key Management**: Enter your provider API keys directly in the UI Settings dialog (saved locally in your browser) or via `.env`.
+- **🔒 Secure Server-Side Key Management**: API keys remain strictly secure on the backend (via `.env` or deployment secrets) and are never exposed to browser clients or leaked in error logs.
 - **🧠 Bounded Context Memory**: Rolling conversation summaries retain critical facts, requirements, and decisions while keeping prompt size optimal.
 - **💬 Conversation Management**: Search conversations by title or message content, rename chats, edit earlier prompts, or regenerate replies.
-- **🔒 Production-Hardened Security**: Built-in HTTP Strict Transport Security (HSTS), Content Security Policy (CSP), timing-safe authentication, and origin isolation.
-- **🎨 Modern Responsive UI**: Theme switching (Light / Dark / System), mobile drawer, keyboard navigation (`Ctrl + K`, `Ctrl + Shift + O`), and native modal dialogs.
+- **🛡️ Production-Hardened Security**: Built-in HTTP Strict Transport Security (HSTS), Content Security Policy (CSP), timing-safe authentication, and origin isolation.
+- **🎨 Modern Responsive UI**: Dedicated provider and model selectors, theme switching (Light / Dark / System), mobile drawer, keyboard navigation (`Ctrl + K`), and native modal dialogs.
 
 ---
 
@@ -116,7 +116,7 @@ uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
 | **OpenRouter** | `anthropic/claude-3.5-sonnet`, `deepseek/deepseek-r1` | ⚡ Fast | [OpenRouter Keys](https://openrouter.ai/keys) |
 | **Ollama** | `llama3.2`, `mistral`, `qwen2.5-coder` | Depends on hardware | No key required (local) |
 
-You can input your API key directly in the in-app **Settings** modal, or set `GROQ_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, or `OPENROUTER_API_KEY` in `.env`.
+Set your desired provider API keys (`GROQ_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY`, or `OPENAI_API_KEY`) in your server's `.env` file or cloud hosting environment settings. Forma's `/api/models` endpoint probes your configured providers and presents only operational models in the UI. Ollama is completely optional.
 
 ---
 
