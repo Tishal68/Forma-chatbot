@@ -297,7 +297,7 @@ export function Composer({
 
           <div className="composer-actions">
             <span className="send-hint">
-              <span>⌘</span> Enter to send
+              Enter to send
             </span>
 
             {busy ? (
@@ -316,7 +316,7 @@ export function Composer({
                 type="submit"
                 className="send primary-send"
                 disabled={!canSend}
-                title="Send message"
+                title="Send message (Enter)"
                 aria-label="Send message"
               >
                 <Send size={15} />
@@ -328,8 +328,8 @@ export function Composer({
       </form>
 
       <p className="composer-caption">
-        AI can make mistakes. Check important information.
-        <span>Enter to send · Shift + Enter for a new line</span>
+        <span>AI can make mistakes. Verify important information.</span>
+        <span>Shift + Enter for new line</span>
       </p>
     </div>
   );

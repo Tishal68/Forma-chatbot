@@ -71,9 +71,10 @@ export function Sidebar({
   return (
     <>
       {sidebar && (
-        <button
+        <div
           className="drawer-scrim"
-          aria-label="Close navigation"
+          role="presentation"
+          aria-hidden="true"
           onClick={onClose}
         />
       )}

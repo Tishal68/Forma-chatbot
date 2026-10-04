@@ -120,7 +120,9 @@ export const Message = memo(function Message({
           </span>
           <strong className="author-name">{assistant ? "Forma" : "You"}</strong>
           {assistant && message.model && (
-            <span className="message-model">{message.model}</span>
+            <span className="message-model" title={`Model: ${message.model}`}>
+              {message.model}
+            </span>
           )}
         </div>
         {time && <span className="message-time">{time}</span>}

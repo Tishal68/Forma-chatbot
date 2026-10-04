@@ -16,6 +16,8 @@ services:
         value: /var/data/chat.db
       - key: ATTACHMENTS_DIR
         value: /var/data/attachments
+      - key: SESSION_SECRET
+        generateValue: true
       # Optional HTTP Basic Auth: leave unset for public zero-login access with anonymous visitor session cookies.
       - key: AUTH_USERNAME
         sync: false

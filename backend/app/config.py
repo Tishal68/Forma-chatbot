@@ -87,27 +87,70 @@ class Settings:
     def CSRF_COOKIE_NAME(self) -> str:
         return os.getenv('CSRF_COOKIE_NAME', 'forma_csrf')
 
+    _cached_session_secret: str | None = None
+
+    def reset_session_secret_cache(self) -> None:
+        """Clear cached session secret (primarily for testing)."""
+        self._cached_session_secret = None
+
+    def get_session_secret_path(self) -> Path:
+        """
+        Determine persistent path for storing SESSION_SECRET.
+        In production, prioritizes the persistent volume directory containing DATABASE_PATH
+        (defaults to /var/data/.session_secret in Docker / Railway / Render).
+        """
+        db_env = os.getenv('DATABASE_PATH')
+        if db_env:
+            return Path(db_env).resolve().parent / '.session_secret'
+        var_data = Path('/var/data')
+        if var_data.exists() or self.is_production:
+            return var_data / '.session_secret'
+        return ROOT / 'data' / '.session_secret'
+
     @property
     def SESSION_SECRET(self) -> str:
-        secret = os.getenv('SESSION_SECRET', '')
-        if not secret:
-            secret_file = ROOT / 'data' / '.session_secret'
-            if secret_file.exists():
-                try:
-                    cached = secret_file.read_text(encoding='utf-8').strip()
-                    if cached:
-                        return cached
-                except OSError:
-                    pass
-            import secrets
-            generated = secrets.token_hex(32)
+        secret = os.getenv('SESSION_SECRET', '').strip()
+        if secret:
+            self._cached_session_secret = secret
+            return secret
+
+        if self._cached_session_secret:
+            return self._cached_session_secret
+
+        secret_file = self.get_session_secret_path()
+        if secret_file.exists():
             try:
-                secret_file.parent.mkdir(parents=True, exist_ok=True)
-                secret_file.write_text(generated, encoding='utf-8')
-            except OSError:
-                pass
+                cached = secret_file.read_text(encoding='utf-8').strip()
+                if cached:
+                    self._cached_session_secret = cached
+                    return cached
+            except OSError as exc:
+                if self.is_production:
+                    raise RuntimeError(
+                        f"Production requires a stable SESSION_SECRET environment variable or readable secret file at {secret_file}. Failed to read: {exc}"
+                    )
+
+        import secrets
+        generated = secrets.token_hex(32)
+        try:
+            secret_file.parent.mkdir(parents=True, exist_ok=True)
+            secret_file.write_text(generated, encoding='utf-8')
+            self._cached_session_secret = generated
             return generated
-        return secret
+        except OSError as exc:
+            if self.is_production:
+                raise RuntimeError(
+                    f"In production, SESSION_SECRET must be set in environment variables or persisted on /var/data (attempted {secret_file}): {exc}. "
+                    "Cannot silently generate ephemeral session secret."
+                )
+            import logging
+            logging.getLogger('forma').warning(
+                "Could not persist SESSION_SECRET to %s: %s; using memoized in-memory secret for process",
+                secret_file,
+                exc,
+            )
+            self._cached_session_secret = generated
+            return generated
 
     @property
     def SESSION_MAX_AGE_SECONDS(self) -> int:

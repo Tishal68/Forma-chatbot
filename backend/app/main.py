@@ -76,6 +76,9 @@ async def lifespan(app: FastAPI):
                 'Set GROQ_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY, OPENAI_API_KEY, or OLLAMA_BASE_URL to enable AI completions.'
             )
 
+        # Validate that SESSION_SECRET is stable and persisted on /var/data before serving traffic
+        _ = settings.SESSION_SECRET
+
     initialize()
 
     # Reset any generation status left behind by killed processes
@@ -186,7 +189,7 @@ async def security_middleware(request: Request, call_next):
     response = await call_next(request)
 
     is_https = request.url.scheme == 'https' or request.headers.get('x-forwarded-proto') == 'https'
-    is_secure = settings.is_production or is_https
+    is_secure = is_https
 
     # Set session cookie if new or rotated
     if request.state.new_session:
