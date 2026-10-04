@@ -188,8 +188,8 @@ def check_vision_support(provider: str, model: str) -> tuple[bool, str]:
     m = (model or '').lower().strip()
 
     if p == 'ollama':
-        is_supported = any(sig in m for sig in KNOWN_OLLAMA_VISION_MODELS)
-        if not is_supported:
+        metadata = get_model_metadata('ollama', model)
+        if not metadata.get("supports_vision"):
             return (
                 False,
                 f"The selected Ollama model '{model}' does not support vision or image analysis. "

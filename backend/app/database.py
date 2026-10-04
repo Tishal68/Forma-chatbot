@@ -39,7 +39,8 @@ def initialize():
           content TEXT NOT NULL, created_at TEXT NOT NULL,
           status TEXT NOT NULL DEFAULT 'complete', model TEXT,
           sources TEXT,
-          web_search INTEGER DEFAULT 0);
+          web_search INTEGER DEFAULT 0,
+          auto_reason TEXT);
 
         CREATE INDEX IF NOT EXISTS messages_conversation ON messages(conversation_id, id);
 
@@ -75,4 +76,6 @@ def initialize():
             db.execute('ALTER TABLE messages ADD COLUMN sources TEXT')
         if 'web_search' not in msg_columns:
             db.execute('ALTER TABLE messages ADD COLUMN web_search INTEGER DEFAULT 0')
+        if 'auto_reason' not in msg_columns:
+            db.execute('ALTER TABLE messages ADD COLUMN auto_reason TEXT')
 

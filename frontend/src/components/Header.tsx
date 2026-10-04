@@ -16,6 +16,7 @@ interface HeaderProps {
   modelDetails?: ModelDetail[];
   busy: boolean;
   onModelChange: (model: string) => void;
+  onSelectModel?: (provider: string, model: string) => void;
   onNewChat: () => void;
   onRename?: () => void;
 }
@@ -34,6 +35,7 @@ export function Header({
   modelDetails = [],
   busy,
   onModelChange,
+  onSelectModel,
   onNewChat,
   onRename,
 }: HeaderProps) {
@@ -124,14 +126,22 @@ export function Header({
                 role="menuitem"
                 tabIndex={0}
                 onClick={() => {
-                  onProviderChange("auto");
-                  onModelChange("auto");
+                  if (onSelectModel) {
+                    onSelectModel("auto", "auto");
+                  } else {
+                    onProviderChange("auto");
+                    onModelChange("auto");
+                  }
                   setDropdownOpen(false);
                 }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
-                    onProviderChange("auto");
-                    onModelChange("auto");
+                    if (onSelectModel) {
+                      onSelectModel("auto", "auto");
+                    } else {
+                      onProviderChange("auto");
+                      onModelChange("auto");
+                    }
                     setDropdownOpen(false);
                   }
                 }}
@@ -176,14 +186,22 @@ export function Header({
                               role="menuitem"
                               tabIndex={0}
                               onClick={() => {
-                                onProviderChange(p.id);
-                                onModelChange(m.id);
+                                if (onSelectModel) {
+                                  onSelectModel(p.id, m.id);
+                                } else {
+                                  onProviderChange(p.id);
+                                  onModelChange(m.id);
+                                }
                                 setDropdownOpen(false);
                               }}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter" || e.key === " ") {
-                                  onProviderChange(p.id);
-                                  onModelChange(m.id);
+                                  if (onSelectModel) {
+                                    onSelectModel(p.id, m.id);
+                                  } else {
+                                    onProviderChange(p.id);
+                                    onModelChange(m.id);
+                                  }
                                   setDropdownOpen(false);
                                 }
                               }}

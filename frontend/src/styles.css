@@ -862,14 +862,35 @@ h1 {
   border-top: 1px dashed var(--border);
 }
 .message-model-tag {
-  font-size: 10px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
   color: var(--muted);
   background: var(--surface);
   border: 1px solid var(--border);
-  padding: 1px 6px;
-  border-radius: 4px;
-  opacity: 0.8;
+  padding: 2px 7px;
+  border-radius: 6px;
+  max-width: 100%;
+}
+.message-model-tag.auto-selected {
+  background: rgba(40, 99, 84, 0.05);
+  border-color: rgba(40, 99, 84, 0.22);
+}
+.auto-model-sparkle {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.message-model-name {
+  font-weight: 550;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 10.5px;
+}
+.message-auto-reason {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: normal;
 }
 .sources-list {
   display: flex;

@@ -120,7 +120,7 @@ export function App() {
   }, [search]);
 
   const loadModels = useCallback(
-    async (targetProvider?: string, forceRefresh = false) => {
+    async (targetProvider?: string, forceRefresh = false, explicitModel?: string) => {
       setChecking(true);
       try {
         const query = new URLSearchParams();
@@ -139,12 +139,26 @@ export function App() {
         setModelDetails(data.model_details || []);
         setConnected(true);
 
+        if (explicitModel) {
+          setModel(explicitModel);
+          localStorage.setItem(`forma-model-${activeProvider}`, explicitModel);
+          localStorage.setItem("forma-model", explicitModel);
+          return;
+        }
+
         setModel((old) => {
-          if (old === "auto") return "auto";
+          // If the user previously chose a specific model that exists in data.models, keep it!
+          if (old && old !== "auto" && data.models.includes(old)) {
+            return old;
+          }
           const savedForProvider = localStorage.getItem(`forma-model-${activeProvider}`);
-          if (savedForProvider === "auto") return "auto";
-          if (savedForProvider && data.models.includes(savedForProvider)) return savedForProvider;
-          if (old && data.models.includes(old)) return old;
+          if (savedForProvider && savedForProvider !== "auto" && data.models.includes(savedForProvider)) {
+            return savedForProvider;
+          }
+          const savedGeneral = localStorage.getItem("forma-model");
+          if (savedGeneral && savedGeneral !== "auto" && data.models.includes(savedGeneral)) {
+            return savedGeneral;
+          }
           return "auto";
         });
       } catch {
@@ -155,6 +169,20 @@ export function App() {
     },
     [],
   );
+
+  const handleSelectModel = (newProvider: string, newModel: string) => {
+    setProvider(newProvider);
+    setModel(newModel);
+    localStorage.setItem("forma-provider", newProvider);
+    localStorage.setItem("forma-model", newModel);
+    if (newProvider !== "auto" && newModel !== "auto") {
+      localStorage.setItem(`forma-model-${newProvider}`, newModel);
+      loadModels(newProvider, false, newModel);
+    } else {
+      localStorage.setItem("forma-model", "auto");
+      loadModels("auto", false, "auto");
+    }
+  };
 
   const handleProviderChange = (newProvider: string) => {
     setProvider(newProvider);
@@ -464,7 +492,7 @@ export function App() {
             setMessages((old) =>
               old.map((m) =>
                 m.id === oldId
-                  ? { ...m, id: assistantId, model: routedModel }
+                  ? { ...m, id: assistantId, model: routedModel, auto_reason: event.auto_reason }
                   : m,
               ),
             );
@@ -599,6 +627,7 @@ export function App() {
           modelDetails={modelDetails}
           busy={busy}
           onModelChange={setModel}
+          onSelectModel={handleSelectModel}
           onNewChat={newChat}
           onRename={() => {
             const chat = chats.find((c) => c.id === id);

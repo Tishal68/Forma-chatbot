@@ -28,6 +28,7 @@ export type Message = {
   attachments?: Attachment[];
   sources?: WebSearchResult[];
   web_search?: boolean;
+  auto_reason?: string;
   created_at?: string;
 };
 

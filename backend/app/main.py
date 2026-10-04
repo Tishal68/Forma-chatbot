@@ -23,6 +23,7 @@ from .extractors import check_vision_support, extract_file_content, sanitize_fil
 from .providers import (
     PROVIDERS,
     get_api_key,
+    get_ollama_model_detail,
     get_provider_config,
     is_provider_configured,
     probe_provider_health,
@@ -362,20 +363,9 @@ async def list_models(provider: str | None = None, refresh: bool = False):
         p_models = []
         if pid == 'ollama':
             installed = h.get('models', [])
-            raw_models = installed if installed else [settings.OLLAMA_MODEL]
+            raw_models = installed if installed else ([settings.OLLAMA_MODEL] if not h["working"] else [])
             for m in raw_models:
-                is_vis = any(sig in m.lower() for sig in ('vision', 'llava', 'minicpm-v', 'moondream', 'qwen2-vl'))
-                p_models.append({
-                    "id": m,
-                    "name": m,
-                    "provider": "ollama",
-                    "badge": "🖥️ Local",
-                    "description": "Local offline model",
-                    "supports_vision": is_vis,
-                    "supports_reasoning": False,
-                    "is_fast": True,
-                    "capabilities": ["Vision", "Local"] if is_vis else ["Local"],
-                })
+                p_models.append(get_ollama_model_detail(m))
         else:
             p_models = [dict(m) for m in pdata.get("models", [])]
 
@@ -406,11 +396,8 @@ async def list_models(provider: str | None = None, refresh: bool = False):
 
     if active_p == 'ollama':
         installed = phealth.get('models', [])
-        models = installed if installed else [settings.OLLAMA_MODEL]
-        details = [
-            {"id": m, "name": m, "badge": "🖥️ Local", "description": "Local offline model", "supports_vision": any(sig in m.lower() for sig in ('vision', 'llava')), "capabilities": ["Local"]}
-            for m in models
-        ]
+        models = installed if installed else ([settings.OLLAMA_MODEL] if not phealth.get("working") else [])
+        details = [get_ollama_model_detail(m) for m in models]
         default_m = settings.OLLAMA_MODEL if settings.OLLAMA_MODEL in models else (models[0] if models else settings.OLLAMA_MODEL)
     else:
         curated = pconfig.get("models", [])
@@ -979,8 +966,8 @@ async def stream_chat_response(body: ChatPayload, request: Request):
 
         saved_model_tag = f"{provider}:{model}"
         mid = db.execute(
-            "INSERT INTO messages(conversation_id, role, content, created_at, status, model) VALUES (?, 'assistant', '', ?, 'generating', ?)",
-            (cid, now(), saved_model_tag),
+            "INSERT INTO messages(conversation_id, role, content, created_at, status, model, auto_reason) VALUES (?, 'assistant', '', ?, 'generating', ?, ?)",
+            (cid, now(), saved_model_tag, auto_explanation or None),
         ).lastrowid
         db.execute('UPDATE conversations SET updated_at = ? WHERE id = ?', (now(), cid))
 

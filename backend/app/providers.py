@@ -272,6 +272,249 @@ PROVIDERS: dict[str, dict[str, Any]] = {
     },
 }
 
+# ---------------------------------------------------------------------------
+# Ollama model description map
+# More-specific patterns must come before generic ones.
+# ---------------------------------------------------------------------------
+KNOWN_OLLAMA_MODEL_DESCRIPTIONS: list[dict] = [
+    # Vision-capable models
+    {
+        "pattern": "llama3.2-vision",
+        "name": "Llama 3.2 Vision",
+        "badge": "👁️ Vision",
+        "description": "Llama 3.2 with native image understanding — best for photo analysis and visual Q&A.",
+        "supports_vision": True, "supports_reasoning": False, "is_fast": True,
+        "capabilities": ["Vision", "Local"],
+    },
+    {
+        "pattern": "llava",
+        "name": "LLaVA",
+        "badge": "👁️ Vision",
+        "description": "Multimodal vision-language model for describing and reasoning about images.",
+        "supports_vision": True, "supports_reasoning": False, "is_fast": True,
+        "capabilities": ["Vision", "Local"],
+    },
+    {
+        "pattern": "minicpm-v",
+        "name": "MiniCPM-V",
+        "badge": "👁️ Compact Vision",
+        "description": "Compact multimodal model designed for efficient image and text understanding.",
+        "supports_vision": True, "supports_reasoning": False, "is_fast": True,
+        "capabilities": ["Vision", "Local"],
+    },
+    {
+        "pattern": "moondream",
+        "name": "Moondream",
+        "badge": "👁️ Tiny Vision",
+        "description": "Ultra-lightweight vision model for quick image captioning on limited hardware.",
+        "supports_vision": True, "supports_reasoning": False, "is_fast": True,
+        "capabilities": ["Vision", "Local"],
+    },
+    {
+        "pattern": "qwen2-vl",
+        "name": "Qwen2-VL",
+        "badge": "👁️ Vision + Reasoning",
+        "description": "Qwen2 vision-language model capable of image analysis and multilingual reasoning.",
+        "supports_vision": True, "supports_reasoning": True, "is_fast": False,
+        "capabilities": ["Vision", "Reasoning", "Local"],
+    },
+    {
+        "pattern": "granite3-vision",
+        "name": "Granite 3 Vision",
+        "badge": "👁️ Vision",
+        "description": "IBM Granite 3 model with image understanding for business documents.",
+        "supports_vision": True, "supports_reasoning": False, "is_fast": True,
+        "capabilities": ["Vision", "Local"],
+    },
+    {
+        "pattern": "bakllava",
+        "name": "BakLLaVA",
+        "badge": "👁️ Vision",
+        "description": "Mistral-based multimodal model for visual analysis and descriptive image QA.",
+        "supports_vision": True, "supports_reasoning": False, "is_fast": True,
+        "capabilities": ["Vision", "Local"],
+    },
+    # Reasoning / coding models
+    {
+        "pattern": "deepseek-r1",
+        "name": "DeepSeek-R1",
+        "badge": "🧠 Deep Reasoning",
+        "description": "Step-by-step reasoning model — best for hard math, logic, and complex coding tasks.",
+        "supports_vision": False, "supports_reasoning": True, "is_fast": False,
+        "capabilities": ["Reasoning", "Code", "Local"],
+    },
+    {
+        "pattern": "qwen2.5-coder",
+        "name": "Qwen 2.5 Coder",
+        "badge": "💻 Code",
+        "description": "Specialized code-generation model strong at Python, JS, and system programming.",
+        "supports_vision": False, "supports_reasoning": True, "is_fast": False,
+        "capabilities": ["Code", "Local"],
+    },
+    {
+        "pattern": "qwen2.5",
+        "name": "Qwen 2.5",
+        "badge": "🌐 Multilingual",
+        "description": "Strong multilingual general model with solid instruction-following and reasoning.",
+        "supports_vision": False, "supports_reasoning": True, "is_fast": False,
+        "capabilities": ["Multilingual", "Reasoning", "Local"],
+    },
+    {
+        "pattern": "qwen3",
+        "name": "Qwen 3",
+        "badge": "🧠 Reasoning",
+        "description": "Latest Qwen generation with strong multilingual reasoning and coding capabilities.",
+        "supports_vision": False, "supports_reasoning": True, "is_fast": False,
+        "capabilities": ["Reasoning", "Code", "Local"],
+    },
+    {
+        "pattern": "mistral-nemo",
+        "name": "Mistral NeMo",
+        "badge": "⚡ Efficient",
+        "description": "Compact and fast Mistral model — good for everyday questions and document reading.",
+        "supports_vision": False, "supports_reasoning": False, "is_fast": True,
+        "capabilities": ["Fast", "Local"],
+    },
+    {
+        "pattern": "mistral",
+        "name": "Mistral",
+        "badge": "⚡ Fast",
+        "description": "Efficient Mistral model for everyday conversations and text tasks.",
+        "supports_vision": False, "supports_reasoning": False, "is_fast": True,
+        "capabilities": ["Fast", "Local"],
+    },
+    {
+        "pattern": "codellama",
+        "name": "Code Llama",
+        "badge": "💻 Code",
+        "description": "Meta's code-focused model for code generation, completion, and explanation.",
+        "supports_vision": False, "supports_reasoning": False, "is_fast": True,
+        "capabilities": ["Code", "Local"],
+    },
+    {
+        "pattern": "phi4",
+        "name": "Phi-4",
+        "badge": "🧪 Compact Reasoning",
+        "description": "Microsoft Phi-4: disproportionately strong reasoning for a small local model.",
+        "supports_vision": False, "supports_reasoning": True, "is_fast": True,
+        "capabilities": ["Reasoning", "Fast", "Local"],
+    },
+    {
+        "pattern": "phi3",
+        "name": "Phi-3",
+        "badge": "🧪 Compact",
+        "description": "Microsoft Phi-3: compact and capable on limited hardware.",
+        "supports_vision": False, "supports_reasoning": False, "is_fast": True,
+        "capabilities": ["Fast", "Local"],
+    },
+    {
+        "pattern": "gemma3",
+        "name": "Gemma 3",
+        "badge": "✨ Everyday Chat",
+        "description": "Google Gemma 3 — responsive and accurate for everyday chat and Q&A.",
+        "supports_vision": False, "supports_reasoning": False, "is_fast": True,
+        "capabilities": ["Fast", "Local"],
+    },
+    {
+        "pattern": "gemma2",
+        "name": "Gemma 2",
+        "badge": "✨ Everyday Chat",
+        "description": "Google Gemma 2 — balanced for chat, summarisation, and short documents.",
+        "supports_vision": False, "supports_reasoning": False, "is_fast": True,
+        "capabilities": ["Fast", "Local"],
+    },
+    {
+        "pattern": "gemma",
+        "name": "Gemma",
+        "badge": "✨ Everyday Chat",
+        "description": "Google Gemma model for general-purpose conversation and summarisation.",
+        "supports_vision": False, "supports_reasoning": False, "is_fast": True,
+        "capabilities": ["Fast", "Local"],
+    },
+    # Llama family — specific patterns before generic
+    {
+        "pattern": "llama3.3",
+        "name": "Llama 3.3",
+        "badge": "⚡ Strong General",
+        "description": "Meta Llama 3.3 — excellent general-purpose model for chat, code, and reasoning.",
+        "supports_vision": False, "supports_reasoning": True, "is_fast": False,
+        "capabilities": ["Reasoning", "Local"],
+    },
+    {
+        "pattern": "llama3.2",
+        "name": "Llama 3.2",
+        "badge": "⚡ Fast General",
+        "description": "Compact Llama 3.2 — fast everyday chat and quick follow-up answers.",
+        "supports_vision": False, "supports_reasoning": False, "is_fast": True,
+        "capabilities": ["Fast", "Local"],
+    },
+    {
+        "pattern": "llama3.1",
+        "name": "Llama 3.1",
+        "badge": "🌐 General Chat",
+        "description": "Meta Llama 3.1 instruction model for everyday tasks and conversations.",
+        "supports_vision": False, "supports_reasoning": False, "is_fast": False,
+        "capabilities": ["General Chat", "Local"],
+    },
+    {
+        "pattern": "llama3",
+        "name": "Llama 3",
+        "badge": "🌐 General",
+        "description": "Meta Llama 3 instruction model for general conversation and writing.",
+        "supports_vision": False, "supports_reasoning": False, "is_fast": False,
+        "capabilities": ["General Chat", "Local"],
+    },
+    {
+        "pattern": "llama2",
+        "name": "Llama 2",
+        "badge": "🕰️ Older",
+        "description": "Llama 2 — consider upgrading to Llama 3 for better performance.",
+        "supports_vision": False, "supports_reasoning": False, "is_fast": False,
+        "capabilities": ["Local"],
+    },
+]
+
+
+def get_ollama_model_detail(model_name: str) -> dict:
+    """
+    Return enriched capability metadata for an installed Ollama model.
+    Matches KNOWN_OLLAMA_MODEL_DESCRIPTIONS patterns (lowercase substring).
+    Unknown models get a neutral description — no guessed capabilities.
+    """
+    base_name = (model_name or "").lower().split(":")[0]
+    for entry in KNOWN_OLLAMA_MODEL_DESCRIPTIONS:
+        if entry["pattern"] in base_name:
+            tag = model_name.split(":", 1)[1] if ":" in model_name else ""
+            display_name = entry["name"]
+            if tag and tag != "latest":
+                display_name = f"{entry['name']} ({tag})"
+            return {
+                "id": model_name,
+                "name": display_name,
+                "provider": "ollama",
+                "badge": entry["badge"],
+                "description": entry["description"],
+                "supports_vision": entry["supports_vision"],
+                "supports_reasoning": entry["supports_reasoning"],
+                "supports_search": False,
+                "is_fast": entry["is_fast"],
+                "capabilities": entry["capabilities"],
+            }
+
+    # Unknown model — neutral metadata, no guessed capabilities
+    return {
+        "id": model_name,
+        "name": model_name,
+        "provider": "ollama",
+        "badge": "🖥️ Local",
+        "description": "General-purpose local model.",
+        "supports_vision": False,
+        "supports_reasoning": False,
+        "supports_search": False,
+        "is_fast": False,
+        "capabilities": ["Local"],
+    }
+
 
 def get_provider_config(provider_name: str) -> dict:
     """Retrieve static configuration for a provider."""
@@ -289,22 +532,26 @@ def get_model_metadata(provider: str, model: str) -> dict[str, Any]:
             if m["id"].lower() == m_lower or m["id"].lower().endswith(m_lower) or m_lower.endswith(m["id"].lower()):
                 return dict(m)
 
-    # Fallback heuristics for custom or Ollama models
-    is_vision = any(sig in m_lower for sig in ("vision", "llava", "minicpm-v", "moondream", "qwen2-vl", "vl-"))
-    is_reasoning = any(sig in m_lower for sig in ("r1", "reason", "o1", "o3", "deepseek-r", "think"))
+    if p_lower == "ollama":
+        detail = get_ollama_model_detail(model)
+        detail["context_window"] = int(os.getenv("CONTEXT_TOKENS", "8192"))
+        detail["max_output_tokens"] = 4096
+        return detail
+
+    # Fallback for custom or unlisted models: neutral metadata, no guessed capabilities
     return {
         "id": model,
         "name": model,
         "provider": p_lower,
         "badge": "Custom",
-        "description": "Provider model",
-        "supports_vision": is_vision,
-        "supports_reasoning": is_reasoning,
+        "description": "Configured provider model.",
+        "supports_vision": False,
+        "supports_reasoning": False,
         "supports_search": True,
-        "is_fast": not is_reasoning,
-        "context_window": 131072 if p_lower != "ollama" else int(os.getenv("CONTEXT_TOKENS", "8192")),
+        "is_fast": True,
+        "context_window": 131072,
         "max_output_tokens": 4096,
-        "capabilities": (["Vision"] if is_vision else []) + (["Reasoning"] if is_reasoning else ["Fast"]),
+        "capabilities": ["Custom"],
     }
 
 
@@ -315,6 +562,14 @@ def get_vision_capable_models(healthy_providers: list[str] | None = None) -> lis
     for pid in allowed_providers:
         pcfg = PROVIDERS.get(pid)
         if not pcfg:
+            continue
+        if pid == "ollama":
+            cached = _HEALTH_CACHE.get("ollama")
+            installed = cached[1].get("models", []) if cached else []
+            for m in installed:
+                det = get_ollama_model_detail(m)
+                if det.get("supports_vision"):
+                    result.append(det)
             continue
         for m in pcfg.get("models", []):
             if m.get("supports_vision"):
@@ -334,27 +589,56 @@ def select_auto_model(
     Returns: (provider_id, model_id, routing_explanation)
 
     Routing Rules:
-    1. Image attachment -> Model that verified accepts image input (Gemini, GPT-4o, Claude 3.5 Sonnet).
-    2. PDF/DOCX/CSV/Code attachment -> Large-context text model with structured extraction capability.
-    3. Web search -> Model well-grounded for citation and source-based answering.
-    4. Complex coding/math/reasoning -> Frontier reasoning model (DeepSeek R1, GPT-OSS 120B, o3-mini, Gemini Pro).
-    5. General chat -> Fast, economical text model (GPT-OSS 20B/120B, Gemini Flash, GPT-4o Mini).
+    1. Image attachment -> verified vision-capable model only (never text-only).
+    2. PDF/DOCX/CSV/Code attachment -> large-context text model.
+    3. Web search -> citation-grounded model.
+    4. Complex coding/math/reasoning -> frontier reasoning model.
+    5. General chat -> fast, economical text model.
     """
-    # 1. Determine available pool of providers
+    # Determine available pool of providers
     if healthy_providers:
         configured = [p.lower() for p in healthy_providers if is_provider_configured(p)]
     else:
         configured = [p for p in PROVIDERS if is_provider_configured(p)]
 
     if not configured:
-        # Fallback default
         return "groq", "openai/gpt-oss-120b", "Default fallback (Groq GPT-OSS 120B)"
+
+    def has_p(name: str) -> bool:
+        return name in configured
+
+    # --- Ollama helpers: read from health cache, no extra network call ---
+    def installed_ollama_models() -> list[str]:
+        if "ollama" in _HEALTH_CACHE:
+            _, data = _HEALTH_CACHE["ollama"]
+            return list(data.get("models", []))
+        if settings.OLLAMA_MODEL:
+            return [settings.OLLAMA_MODEL]
+        return []
+
+    def ollama_model_with(predicate) -> str | None:
+        """First installed Ollama model satisfying predicate(detail_dict)."""
+        for m in installed_ollama_models():
+            if predicate(get_ollama_model_detail(m)):
+                return m
+        return None
+
+    def ollama_best_text(prefer_reasoning: bool = False) -> str | None:
+        """Best available Ollama text model (prefers reasoning-capable if requested)."""
+        installed = installed_ollama_models()
+        if not installed:
+            return None
+        if prefer_reasoning:
+            for m in installed:
+                if get_ollama_model_detail(m).get("supports_reasoning"):
+                    return m
+        return installed[0]
 
     # Helper to check if a specific provider is available
     def has_p(name: str) -> bool:
         return name in configured
 
-    # 1. Image Attachment Routing
+    # 1. Image Attachment Routing — only verified vision-capable models
     if has_images:
         if has_p("gemini"):
             return "gemini", "gemini-2.5-flash", "Auto: Gemini 2.5 Flash selected for high-speed multimodal image understanding."
@@ -363,10 +647,14 @@ def select_auto_model(
         if has_p("openrouter"):
             return "openrouter", "anthropic/claude-3.5-sonnet", "Auto: Claude 3.5 Sonnet selected for precision visual inspection."
         if has_p("ollama"):
-            # Check if any vision model is present
-            return "ollama", "llama3.2-vision", "Auto: Ollama Vision selected for local image analysis."
-        # If no vision provider configured, raise or route to first available with an informative error
-        raise ValueError("No vision-capable AI provider (Google Gemini or OpenAI) is configured on this server to analyze images.")
+            vis_model = ollama_model_with(lambda d: d.get("supports_vision"))
+            if vis_model:
+                return "ollama", vis_model, f"Auto: {vis_model} selected for local image analysis."
+            raise ValueError(
+                "No vision-capable Ollama model is installed. "
+                "Install a vision model (e.g. `ollama pull llama3.2-vision` or `ollama pull llava`), or configure Gemini or OpenAI."
+            )
+        raise ValueError("No vision-capable AI provider is configured on this server to analyze images.")
 
     # 2. PDF / DOCX / CSV / Code Document Routing
     if has_documents:
@@ -379,7 +667,9 @@ def select_auto_model(
         if has_p("openrouter"):
             return "openrouter", "meta-llama/llama-3.3-70b-instruct", "Auto: Llama 3.3 70B selected for document analysis."
         if has_p("ollama"):
-            return "ollama", settings.OLLAMA_MODEL, "Auto: Local model selected for document analysis."
+            m = ollama_best_text()
+            if m:
+                return "ollama", m, f"Auto: {m} selected for local document analysis."
 
     # 3. Web Search Routing
     if is_web_search:
@@ -392,7 +682,9 @@ def select_auto_model(
         if has_p("openrouter"):
             return "openrouter", "meta-llama/llama-3.3-70b-instruct", "Auto: Llama 3.3 70B selected for web search grounding."
         if has_p("ollama"):
-            return "ollama", settings.OLLAMA_MODEL, "Auto: Local model selected for web search."
+            m = ollama_best_text()
+            if m:
+                return "ollama", m, f"Auto: {m} selected for local web search."
 
     # 4. Complex Coding / Deep Reasoning Detection
     text_lower = (content or "").lower()
@@ -415,7 +707,11 @@ def select_auto_model(
         if has_p("gemini"):
             return "gemini", "gemini-2.5-pro", "Auto: Gemini 2.5 Pro selected for deep analytical reasoning."
         if has_p("ollama"):
-            return "ollama", settings.OLLAMA_MODEL, "Auto: Local model selected."
+            m = ollama_best_text(prefer_reasoning=True)
+            if m:
+                det = get_ollama_model_detail(m)
+                reason = f"Auto: {m} selected for local reasoning and coding." if det.get("supports_reasoning") else f"Auto: {m} selected for local execution."
+                return "ollama", m, reason
 
     # 5. General Chat -> Fast & Economical
     if has_p("groq"):
@@ -427,10 +723,17 @@ def select_auto_model(
     if has_p("openrouter"):
         return "openrouter", "meta-llama/llama-3.3-70b-instruct", "Auto: Llama 3.3 70B selected for general chat."
     if has_p("ollama"):
-        return "ollama", settings.OLLAMA_MODEL, "Auto: Local model selected."
+        m = ollama_best_text()
+        if m:
+            return "ollama", m, f"Auto: {m} selected for local chat."
 
     # Fallback to first configured
     first_p = configured[0]
+    if first_p == "ollama":
+        m = ollama_best_text()
+        if not m:
+            raise ValueError("No Ollama models are installed or reachable. Run `ollama pull <model>` or configure a cloud provider.")
+        return "ollama", m, f"Auto: {m} selected."
     return first_p, PROVIDERS[first_p]["default_model"], f"Auto: {first_p} default selected."
 
 
@@ -537,7 +840,7 @@ async def probe_provider_health(provider_name: str, force: bool = False) -> dict
                         "working": True,
                         "status": "ready",
                         "error": None,
-                        "models": installed if installed else [settings.OLLAMA_MODEL],
+                        "models": installed,
                     }
                 else:
                     res = {

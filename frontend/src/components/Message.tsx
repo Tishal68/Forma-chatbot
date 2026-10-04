@@ -14,6 +14,7 @@ import {
   Image as ImageIcon,
   Pencil,
   RotateCcw,
+  Sparkles,
 } from "lucide-react";
 import type { Attachment, Message as MessageType, WebSearchResult } from "../types";
 
@@ -119,10 +120,21 @@ export const Message = memo(function Message({
             )}
           </span>
           <strong className="author-name">{assistant ? "Forma" : "You"}</strong>
-          {/* Subtle model indicator shown on hover or details */}
+          {/* Model indicator with Auto routing reason */}
           {assistant && message.model && (
-            <span className="message-model-tag" title={`Model: ${message.model}`}>
-              {message.model.split(":").pop()?.replace(/^openai\//, "")}
+            <span
+              className={`message-model-tag ${message.auto_reason ? "auto-selected" : ""}`}
+              title={message.auto_reason || `Model: ${message.model}`}
+            >
+              {message.auto_reason && <Sparkles size={11} className="auto-model-sparkle" />}
+              <span className="message-model-name">
+                {message.model.split(":").pop()?.replace(/^openai\//, "")}
+              </span>
+              {message.auto_reason && (
+                <span className="message-auto-reason">
+                  · {message.auto_reason.replace(/^Auto:\s*/i, "")}
+                </span>
+              )}
             </span>
           )}
         </div>
