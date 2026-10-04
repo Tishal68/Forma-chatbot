@@ -57,13 +57,9 @@ async def lifespan(app: FastAPI):
             )
         configured_any = any(is_provider_configured(p) for p in PROVIDERS)
         if not configured_any:
-            log.critical(
-                'FATAL: Production requires at least one configured AI provider. '
-                'Set GROQ_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY, OPENAI_API_KEY, or OLLAMA_BASE_URL.'
-            )
-            raise RuntimeError(
-                'Production requires at least one configured AI provider. '
-                'Set GROQ_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY, OPENAI_API_KEY, or OLLAMA_BASE_URL.'
+            log.warning(
+                'Production warning: No AI provider is configured in environment. '
+                'Set GROQ_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY, OPENAI_API_KEY, or OLLAMA_BASE_URL to enable AI completions.'
             )
 
     initialize()
