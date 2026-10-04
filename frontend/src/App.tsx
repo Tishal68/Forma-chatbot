@@ -94,11 +94,13 @@ export function App() {
   const loadVersion = useRef(0);
   const searchVersion = useRef(0);
 
+  const isAuto = provider === "auto" || model === "auto" || !model || model === "";
   const currentProviderInfo = providers.find((p) => p.id === provider);
   const ready = Boolean(
     connected &&
-      (currentProviderInfo ? currentProviderInfo.working : true) &&
-      models.includes(model),
+      (isAuto ||
+        ((currentProviderInfo ? currentProviderInfo.working : true) &&
+          models.includes(model))),
   );
 
   useEffect(() => {
@@ -122,26 +124,28 @@ export function App() {
       setChecking(true);
       try {
         const query = new URLSearchParams();
-        if (targetProvider) query.set("provider", targetProvider);
+        if (targetProvider && targetProvider !== "auto") query.set("provider", targetProvider);
         if (forceRefresh) query.set("refresh", "true");
 
         const data = await api<ModelsResponse>("/models?" + query.toString());
         if (data.providers && data.providers.length > 0) {
           setProviders(data.providers);
         }
-        const activeProvider = data.provider || targetProvider || "groq";
-        setProvider(activeProvider);
+        const activeProvider = targetProvider || data.provider || "groq";
+        if (targetProvider !== "auto") {
+          setProvider(activeProvider);
+        }
         setModels(data.models || []);
         setModelDetails(data.model_details || []);
         setConnected(true);
 
         setModel((old) => {
+          if (old === "auto") return "auto";
           const savedForProvider = localStorage.getItem(`forma-model-${activeProvider}`);
-          const preferred =
-            savedForProvider ||
-            (old && data.models.includes(old) ? old : data.default);
-          if (data.models.includes(preferred)) return preferred;
-          return data.models[0] || data.default || "";
+          if (savedForProvider === "auto") return "auto";
+          if (savedForProvider && data.models.includes(savedForProvider)) return savedForProvider;
+          if (old && data.models.includes(old)) return old;
+          return "auto";
         });
       } catch {
         setConnected(false);
@@ -456,10 +460,15 @@ export function App() {
           if (event.type === "start") {
             const oldId = assistantId;
             assistantId = event.message_id;
+            const routedModel = event.provider && event.model ? `${event.provider}:${event.model}` : `${provider}:${model}`;
             setMessages((old) =>
-              old.map((m) => (m.id === oldId ? { ...m, id: assistantId } : m)),
+              old.map((m) =>
+                m.id === oldId
+                  ? { ...m, id: assistantId, model: routedModel }
+                  : m,
+              ),
             );
-            setStatus("Thinking…");
+            setStatus(event.auto_reason ? event.auto_reason : "Thinking…");
           }
           if (event.type === "sources") {
             setMessages((old) =>

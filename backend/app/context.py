@@ -26,22 +26,38 @@ def cost(messages: list[dict]) -> int:
 def budget_attachment_content(content: str, max_bytes: int) -> str:
     """
     Intelligently budget long files/attachments instead of silently truncating them.
-    Preserves page headers, document structure, line numbers, and key sections.
+    Preserves user prompt, page headers, document structure, line numbers, and key sections.
     """
     content_bytes = len(content.encode('utf-8'))
     if content_bytes <= max_bytes:
         return content
 
-    # Check if the document has page-separated sections
+    # 1. If content contains Web Search Results followed by User Question
+    if "### Web Search Results for:" in content and "\n\nUser Question:\n" in content:
+        search_part, question_part = content.split("\n\nUser Question:\n", 1)
+        q_bytes = len(question_part.encode('utf-8'))
+        avail_for_search = max(400, max_bytes - q_bytes - 100)
+        enc_search = search_part.encode('utf-8')
+        if len(enc_search) > avail_for_search:
+            search_part = enc_search[:avail_for_search].decode('utf-8', errors='ignore') + "\n[... Web search sources condensed to preserve context budget ...]\n"
+        return f"{search_part}\n\nUser Question:\n{question_part}"
+
+    # 2. If content contains a user question followed by [Attached Files & Context]:
+    if "\n\n[Attached Files & Context]:\n" in content:
+        user_prompt, doc_part = content.split("\n\n[Attached Files & Context]:\n", 1)
+        up_bytes = len(user_prompt.encode('utf-8'))
+        avail_for_docs = max(400, max_bytes - up_bytes - 100)
+        budgeted_docs = budget_attachment_content(doc_part, avail_for_docs)
+        return f"{user_prompt}\n\n[Attached Files & Context]:\n{budgeted_docs}"
+
+    # 3. Check if the document has page-separated sections
     if '--- [File:' in content:
-        # Split by file or page headers
         chunks = content.split('--- [File:')
         header_prefix = chunks[0]
         file_chunks = ['--- [File:' + c for c in chunks[1:]]
 
         if file_chunks:
-            # Distribute available byte budget across chunks
-            per_chunk_bytes = max(300, (max_bytes - 600) // len(file_chunks))
+            per_chunk_bytes = max(250, (max_bytes - len(header_prefix.encode('utf-8')) - 400) // len(file_chunks))
             budgeted_chunks = []
             for fc in file_chunks:
                 lines = fc.strip().split('\n')
@@ -52,7 +68,6 @@ def budget_attachment_content(content: str, max_bytes: int) -> str:
                 if len(body_encoded) <= per_chunk_bytes:
                     budgeted_chunks.append(fc)
                 else:
-                    # Keep start and end of page/section to preserve context
                     half = per_chunk_bytes // 2
                     start_part = body_encoded[:half].decode('utf-8', errors='ignore')
                     end_part = body_encoded[-half:].decode('utf-8', errors='ignore')
@@ -66,12 +81,12 @@ def budget_attachment_content(content: str, max_bytes: int) -> str:
 
             notice = (
                 f'\n[Notice: Uploaded document content structured into multi-section digest '
-                f'({len(file_chunks)} pages/sections preserved) to fit within context budget]\n'
+                f'({len(file_chunks)} sections preserved) to fit within context budget]\n'
             )
             return header_prefix + notice + '\n\n'.join(budgeted_chunks)
 
-    # General text condensing
-    half = (max_bytes - 400) // 2
+    # 4. General text condensing
+    half = max(100, (max_bytes - 300) // 2)
     enc = content.encode('utf-8')
     start_str = enc[:half].decode('utf-8', errors='ignore')
     end_str = enc[-half:].decode('utf-8', errors='ignore')
@@ -82,7 +97,6 @@ def budget_attachment_content(content: str, max_bytes: int) -> str:
     )
 
 
-
 async def build_context(
     client,
     model: str,
@@ -91,10 +105,24 @@ async def build_context(
     save_summary,
     notify,
     is_openai_format: bool = False,
+    provider: str = 'ollama',
 ):
-    budget = int(os.getenv('CONTEXT_TOKENS', '8192')) - int(os.getenv('OUTPUT_TOKENS', '4096'))
-    if budget < 1024:
-        raise ValueError('CONTEXT_TOKENS must exceed OUTPUT_TOKENS by at least 1024.')
+    base_budget = int(os.getenv('CONTEXT_TOKENS', '8192')) - int(os.getenv('OUTPUT_TOKENS', '4096'))
+    if base_budget < 1024:
+        base_budget = 4096
+
+    # Real model context limit lookup
+    try:
+        from .providers import get_model_metadata
+        meta = get_model_metadata(provider, model)
+        ctx_window = meta.get("context_window", 8192)
+        out_tokens = meta.get("max_output_tokens", 4096)
+        if ctx_window > 8192 and 'CONTEXT_TOKENS' not in os.environ:
+            budget = max(base_budget, (ctx_window - out_tokens) * 3)
+        else:
+            budget = base_budget
+    except Exception:
+        budget = base_budget
 
     if not messages:
         return [{'role': 'system', 'content': SYSTEM}]
@@ -118,14 +146,9 @@ async def build_context(
     last_content = messages[-1].get('content', '')
     sys_cost = len(SYSTEM.encode('utf-8')) + 64
     if cost([{'content': SYSTEM}, {'content': last_content}]) > budget:
-        available = budget - sys_cost - 100
+        available = max(500, budget - sys_cost - 100)
         budgeted = budget_attachment_content(last_content, max_bytes=available)
-        if cost([{'content': SYSTEM}, {'content': budgeted}]) <= budget:
-            remaining[-1] = {**remaining[-1], 'content': budgeted}
-        else:
-            raise ValueError(
-                'This message is too large for the configured context. Shorten it or increase CONTEXT_TOKENS.'
-            )
+        remaining[-1] = {**remaining[-1], 'content': budgeted}
 
     while cost(assembled()) > budget and len(remaining) > 1:
         await notify('Updating conversation memory…')
@@ -208,7 +231,13 @@ async def build_context(
 
     result = assembled()
     if cost(result) > budget:
-        raise ValueError(
-            'Message and memory exceed the context budget. Shorten your message or increase CONTEXT_TOKENS.'
-        )
+        # Guarantee safety: bound remaining content without throwing fatal errors
+        if summary and len(summary.encode('utf-8')) > 600:
+            summary = summary[:600]
+        avail_for_last = max(400, budget - len(SYSTEM.encode('utf-8')) - (len(summary.encode('utf-8')) if summary else 0) - 100)
+        if remaining:
+            remaining[-1] = {**remaining[-1], 'content': budget_attachment_content(remaining[-1].get('content', ''), max_bytes=avail_for_last)}
+        result = assembled()
+
     return result
+

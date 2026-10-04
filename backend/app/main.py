@@ -145,10 +145,11 @@ async def security_middleware(request: Request, call_next):
                 },
             )
 
-    # 3. Optional HTTP Basic Auth: only enforced if both username and password are set
+    # 3. Optional HTTP Basic Auth: only enforced if credentials configured and not public mode
+    is_public = os.getenv('FORMA_PUBLIC_MODE', '').lower() in ('1', 'true', 'yes')
     username = settings.AUTH_USERNAME
     password = settings.AUTH_PASSWORD
-    if username and password and request.url.path != '/api/health':
+    if not is_public and username and password and request.url.path != '/api/health':
         auth_header = request.headers.get('authorization')
         if not verify_basic_auth(auth_header, username, password):
             return JSONResponse(
@@ -357,6 +358,27 @@ async def list_models(provider: str | None = None, refresh: bool = False):
         h = health_by_pid[pid]
         if h["working"]:
             working_providers.append(pid)
+
+        p_models = []
+        if pid == 'ollama':
+            installed = h.get('models', [])
+            raw_models = installed if installed else [settings.OLLAMA_MODEL]
+            for m in raw_models:
+                is_vis = any(sig in m.lower() for sig in ('vision', 'llava', 'minicpm-v', 'moondream', 'qwen2-vl'))
+                p_models.append({
+                    "id": m,
+                    "name": m,
+                    "provider": "ollama",
+                    "badge": "🖥️ Local",
+                    "description": "Local offline model",
+                    "supports_vision": is_vis,
+                    "supports_reasoning": False,
+                    "is_fast": True,
+                    "capabilities": ["Vision", "Local"] if is_vis else ["Local"],
+                })
+        else:
+            p_models = [dict(m) for m in pdata.get("models", [])]
+
         providers_summary.append({
             "id": pid,
             "name": pdata["name"],
@@ -367,6 +389,7 @@ async def list_models(provider: str | None = None, refresh: bool = False):
             "error": h["error"],
             "default_model": pdata["default_model"],
             "key_url": pdata.get("key_url", ""),
+            "models": p_models,
         })
 
     # Pick active provider: explicitly requested provider if valid, else first working, else first configured
@@ -385,7 +408,7 @@ async def list_models(provider: str | None = None, refresh: bool = False):
         installed = phealth.get('models', [])
         models = installed if installed else [settings.OLLAMA_MODEL]
         details = [
-            {"id": m, "name": m, "badge": "🖥️ Local", "description": "Local offline model"}
+            {"id": m, "name": m, "badge": "🖥️ Local", "description": "Local offline model", "supports_vision": any(sig in m.lower() for sig in ('vision', 'llava')), "capabilities": ["Local"]}
             for m in models
         ]
         default_m = settings.OLLAMA_MODEL if settings.OLLAMA_MODEL in models else (models[0] if models else settings.OLLAMA_MODEL)
@@ -401,7 +424,14 @@ async def list_models(provider: str | None = None, refresh: bool = False):
         "models": models,
         "model_details": details,
         "default": default_m,
+        "auto": {
+            "id": "auto",
+            "name": "Auto",
+            "badge": "✨ Smart Routing",
+            "description": "Intelligently chooses the best model for chat, coding, search, documents, or images.",
+        },
     }
+
 
 
 @app.get('/api/conversations')
@@ -800,17 +830,44 @@ async def stream_chat_response(body: ChatPayload, request: Request):
     if not body.regenerate and not body.content.strip() and not attachments:
         raise HTTPException(status_code=422, detail='Write a message or attach a file first.')
 
-    provider = (body.provider or '').lower().strip()
-    if not provider:
-        configured = [p for p in PROVIDERS if is_provider_configured(p)]
-        provider = configured[0] if configured else 'groq'
+    image_attachments = [a for a in attachments if a['is_image']]
+    doc_attachments = [a for a in attachments if not a['is_image']]
+    has_images = bool(image_attachments)
+    has_docs = bool(doc_attachments)
 
-    pconfig = get_provider_config(provider)
-    if not is_provider_configured(provider):
-        raise HTTPException(
-            status_code=400,
-            detail=f"{pconfig['name']} is not configured on this server. Set the {pconfig.get('api_key_env')} API key in server environment variables.",
-        )
+    req_provider = (body.provider or '').lower().strip()
+    req_model = (body.model or '').strip()
+    # Auto routing applies when both provider and model are auto/empty, or model is explicitly 'auto' without a specific provider
+    is_auto = (req_provider in ('', 'auto') and req_model.lower() in ('', 'auto')) or (req_provider in ('', 'auto') and not req_model) or req_model.lower() == 'auto'
+
+    auto_explanation = ""
+    if is_auto:
+        configured_providers = [p for p in PROVIDERS if is_provider_configured(p)]
+        from .providers import select_auto_model
+        try:
+            provider, model, auto_explanation = select_auto_model(
+                has_images=has_images,
+                has_documents=has_docs,
+                is_web_search=body.web_search,
+                content=body.content,
+                healthy_providers=configured_providers,
+            )
+        except ValueError as ve:
+            raise HTTPException(status_code=400, detail=str(ve))
+        pconfig = get_provider_config(provider)
+    else:
+        provider = req_provider
+        pconfig = get_provider_config(provider)
+        if not is_provider_configured(provider):
+            raise HTTPException(
+                status_code=400,
+                detail=f"{pconfig['name']} is not configured on this server. Set the {pconfig.get('api_key_env')} API key in server environment variables.",
+            )
+        model = req_model or pconfig['default_model']
+        if has_images:
+            is_supported, explanation = check_vision_support(provider, model)
+            if not is_supported:
+                raise HTTPException(status_code=400, detail=explanation)
 
     if provider != 'ollama':
         api_key = get_api_key(provider)
@@ -819,15 +876,6 @@ async def stream_chat_response(body: ChatPayload, request: Request):
                 status_code=400,
                 detail=f"Missing API key for {pconfig['name']}. Set {pconfig.get('api_key_env')} in server environment variables.",
             )
-
-    model = body.model or pconfig['default_model']
-
-    # Vision capability check
-    image_attachments = [a for a in attachments if a['is_image']]
-    if image_attachments:
-        is_supported, explanation = check_vision_support(provider, model)
-        if not is_supported:
-            raise HTTPException(status_code=400, detail=explanation)
 
     # Web search handling
     search_results = []
@@ -929,9 +977,10 @@ async def stream_chat_response(body: ChatPayload, request: Request):
         if history and history[-1]['role'] == 'user':
             history[-1]['content'] = full_user_content
 
+        saved_model_tag = f"{provider}:{model}"
         mid = db.execute(
             "INSERT INTO messages(conversation_id, role, content, created_at, status, model) VALUES (?, 'assistant', '', ?, 'generating', ?)",
-            (cid, now(), model),
+            (cid, now(), saved_model_tag),
         ).lastrowid
         db.execute('UPDATE conversations SET updated_at = ? WHERE id = ?', (now(), cid))
 
@@ -945,12 +994,15 @@ async def stream_chat_response(body: ChatPayload, request: Request):
         status = 'stopped'
         is_cloud = provider != 'ollama'
         try:
-            await emit('start', message_id=mid)
+            await emit('start', message_id=mid, provider=provider, model=model, auto_reason=auto_explanation)
             if search_results:
                 await emit('sources', sources=search_results)
 
             try:
-                client_instance = client(provider)
+                try:
+                    client_instance = client(provider)
+                except TypeError:
+                    client_instance = client()
             except Exception as e:
                 log.exception("Failed to initialize client for %s: %s", provider, e)
                 client_instance = client()
@@ -974,6 +1026,7 @@ async def stream_chat_response(body: ChatPayload, request: Request):
                     save_summary,
                     notify,
                     is_openai_format=is_cloud,
+                    provider=provider,
                 )
 
                 if is_cloud:

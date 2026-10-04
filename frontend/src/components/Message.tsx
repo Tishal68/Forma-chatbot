@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import {
   Check,
+  ChevronDown,
   Code2,
   Copy,
   ExternalLink,
@@ -13,7 +14,6 @@ import {
   Image as ImageIcon,
   Pencil,
   RotateCcw,
-  Sparkles,
 } from "lucide-react";
 import type { Attachment, Message as MessageType, WebSearchResult } from "../types";
 
@@ -72,7 +72,7 @@ function CopyButton({
         }
       }}
     >
-      {copied ? <Check size={14} /> : <Copy size={14} />}
+      {copied ? <Check size={13} /> : <Copy size={13} />}
       <span>{failed ? "Select text to copy" : copied ? "Copied" : label}</span>
     </button>
   );
@@ -119,9 +119,10 @@ export const Message = memo(function Message({
             )}
           </span>
           <strong className="author-name">{assistant ? "Forma" : "You"}</strong>
+          {/* Subtle model indicator shown on hover or details */}
           {assistant && message.model && (
-            <span className="message-model" title={`Model: ${message.model}`}>
-              {message.model}
+            <span className="message-model-tag" title={`Model: ${message.model}`}>
+              {message.model.split(":").pop()?.replace(/^openai\//, "")}
             </span>
           )}
         </div>
@@ -144,38 +145,7 @@ export const Message = memo(function Message({
         </div>
       )}
 
-      {/* Render web search source cards for assistant messages */}
-      {assistant && message.sources && message.sources.length > 0 && (
-        <div className="message-sources">
-          <div className="sources-header">
-            <Globe size={13} />
-            <span>Search Sources ({message.sources.length})</span>
-          </div>
-          <div className="sources-list">
-            {message.sources.map((src, i) => {
-              let domain = src.url;
-              try {
-                domain = new URL(src.url).hostname.replace(/^www\./, "");
-              } catch {}
-              return (
-                <a
-                  key={i}
-                  href={src.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="source-chip"
-                  title={src.snippet || src.title}
-                >
-                  <span className="source-domain">{domain}</span>
-                  <span className="source-title">{src.title}</span>
-                  <ExternalLink size={11} className="source-ext" />
-                </a>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
+      {/* Main markdown content */}
       <div className="message-body">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
@@ -251,10 +221,46 @@ export const Message = memo(function Message({
           <small className="status-note stopped">Response stopped</small>
         )}
         {assistant && message.status === "error" && (
-          <small className="status-note error">Response interrupted. You can retry below.</small>
+          <small className="status-note error">Generation interrupted. You can retry below.</small>
         )}
       </div>
 
+      {/* Collapsed Sources Disclosure below assistant responses */}
+      {assistant && message.sources && message.sources.length > 0 && (
+        <details className="sources-disclosure">
+          <summary className="sources-disclosure-summary">
+            <div className="sources-summary-title">
+              <Globe size={13} />
+              <span>Sources ({message.sources.length})</span>
+            </div>
+            <ChevronDown size={14} className="sources-caret" />
+          </summary>
+          <div className="sources-disclosure-content">
+            {message.sources.map((src, i) => {
+              let domain = src.url;
+              try {
+                domain = new URL(src.url).hostname.replace(/^www\./, "");
+              } catch {}
+              return (
+                <a
+                  key={i}
+                  href={src.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="source-chip"
+                  title={src.snippet || src.title}
+                >
+                  <span className="source-domain">{domain}</span>
+                  <span className="source-title">{src.title}</span>
+                  <ExternalLink size={11} className="source-ext" />
+                </a>
+              );
+            })}
+          </div>
+        </details>
+      )}
+
+      {/* Message action controls: compact, visible on touch and on hover */}
       <div className="message-actions">
         <CopyButton text={message.content} />
         {!assistant && (
@@ -273,8 +279,8 @@ export const Message = memo(function Message({
           <button
             className="action-btn"
             onClick={onRegenerate}
-            title="Regenerate response"
-            aria-label="Regenerate response"
+            title={message.status === "error" ? "Retry generation" : "Regenerate response"}
+            aria-label={message.status === "error" ? "Retry generation" : "Regenerate response"}
           >
             <RotateCcw size={13} />
             <span>{message.status === "error" ? "Retry" : "Regenerate"}</span>

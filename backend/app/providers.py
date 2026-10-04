@@ -4,7 +4,7 @@ from typing import Any
 import httpx
 from .config import settings
 
-# Pre-configured providers and their top models
+# Pre-configured providers and their top models with verified capability metadata
 PROVIDERS: dict[str, dict[str, Any]] = {
     "groq": {
         "id": "groq",
@@ -18,26 +18,58 @@ PROVIDERS: dict[str, dict[str, Any]] = {
             {
                 "id": "openai/gpt-oss-120b",
                 "name": "GPT-OSS 120B",
+                "provider": "groq",
                 "badge": "⚡ Blazing Fast & Reasoning",
                 "description": "Massive 120B parameter open-weights model. Exceptional reasoning, coding, and writing at 300+ tokens/sec.",
+                "supports_vision": False,
+                "supports_reasoning": True,
+                "supports_search": True,
+                "is_fast": True,
+                "context_window": 131072,
+                "max_output_tokens": 4096,
+                "capabilities": ["Fast", "Reasoning", "Code"],
             },
             {
                 "id": "openai/gpt-oss-20b",
                 "name": "GPT-OSS 20B",
+                "provider": "groq",
                 "badge": "⚡ Ultra Fast (500+ tok/s)",
-                "description": "Blazing fast 20B model for instant answers and code generation.",
+                "description": "Blazing fast 20B model for instant answers, summary, and code generation.",
+                "supports_vision": False,
+                "supports_reasoning": False,
+                "supports_search": True,
+                "is_fast": True,
+                "context_window": 131072,
+                "max_output_tokens": 4096,
+                "capabilities": ["Fast", "General Chat"],
             },
             {
                 "id": "qwen/qwen3.8-27b",
                 "name": "Qwen 3.8 27B",
+                "provider": "groq",
                 "badge": "🧠 Deep STEM & Math",
-                "description": "Advanced 27B model optimized for multi-step reasoning and analytical tasks.",
+                "description": "Advanced 27B text model optimized for multi-step reasoning, analytical math, and logic.",
+                "supports_vision": False,
+                "supports_reasoning": True,
+                "supports_search": False,
+                "is_fast": False,
+                "context_window": 131072,
+                "max_output_tokens": 4096,
+                "capabilities": ["Reasoning", "Math & STEM"],
             },
             {
                 "id": "allam-2-7b",
                 "name": "ALLaM 2 7B",
+                "provider": "groq",
                 "badge": "🌐 Multilingual",
                 "description": "High-efficiency multilingual instruction model.",
+                "supports_vision": False,
+                "supports_reasoning": False,
+                "supports_search": False,
+                "is_fast": True,
+                "context_window": 8192,
+                "max_output_tokens": 2048,
+                "capabilities": ["Multilingual", "General Chat"],
             },
         ],
     },
@@ -53,26 +85,58 @@ PROVIDERS: dict[str, dict[str, Any]] = {
             {
                 "id": "meta-llama/llama-3.3-70b-instruct",
                 "name": "Llama 3.3 70B Instruct",
+                "provider": "openrouter",
                 "badge": "⚡ Top Frontier Open",
                 "description": "Meta's flagship open-weights instruction model with outstanding general intelligence.",
+                "supports_vision": False,
+                "supports_reasoning": True,
+                "supports_search": True,
+                "is_fast": False,
+                "context_window": 131072,
+                "max_output_tokens": 4096,
+                "capabilities": ["General", "Code", "Search"],
             },
             {
                 "id": "anthropic/claude-3.5-sonnet",
                 "name": "Claude 3.5 Sonnet",
-                "badge": "👑 Coding & Reasoning",
-                "description": "Anthropic's gold standard for complex coding and deep analysis.",
+                "provider": "openrouter",
+                "badge": "👑 Coding & Vision",
+                "description": "Anthropic's frontier model for complex coding, deep analysis, and image understanding.",
+                "supports_vision": True,
+                "supports_reasoning": True,
+                "supports_search": True,
+                "is_fast": False,
+                "context_window": 200000,
+                "max_output_tokens": 8192,
+                "capabilities": ["Vision", "Reasoning", "Code"],
             },
             {
                 "id": "deepseek/deepseek-r1",
                 "name": "DeepSeek R1",
+                "provider": "openrouter",
                 "badge": "🧠 Reasoning Leader",
                 "description": "Frontier open reasoning benchmark leader with chain-of-thought.",
+                "supports_vision": False,
+                "supports_reasoning": True,
+                "supports_search": False,
+                "is_fast": False,
+                "context_window": 64000,
+                "max_output_tokens": 8192,
+                "capabilities": ["Deep Reasoning", "Math"],
             },
             {
                 "id": "openai/gpt-4o",
                 "name": "GPT-4o (OpenRouter)",
+                "provider": "openrouter",
                 "badge": "🧠 Omni Intelligence",
-                "description": "OpenAI flagship multimodal intelligence accessed via OpenRouter.",
+                "description": "OpenAI flagship multimodal intelligence with image analysis via OpenRouter.",
+                "supports_vision": True,
+                "supports_reasoning": True,
+                "supports_search": True,
+                "is_fast": False,
+                "context_window": 128000,
+                "max_output_tokens": 4096,
+                "capabilities": ["Vision", "Reasoning", "Multimodal"],
             },
         ],
     },
@@ -88,20 +152,44 @@ PROVIDERS: dict[str, dict[str, Any]] = {
             {
                 "id": "gpt-4o-mini",
                 "name": "GPT-4o Mini",
+                "provider": "openai",
                 "badge": "⚡ Fast & Intelligent",
-                "description": "Affordable, fast, and high-performance model for day-to-day coding and chat.",
+                "description": "Affordable, fast, multimodal model for day-to-day coding, image analysis, and chat.",
+                "supports_vision": True,
+                "supports_reasoning": False,
+                "supports_search": True,
+                "is_fast": True,
+                "context_window": 128000,
+                "max_output_tokens": 4096,
+                "capabilities": ["Vision", "Fast", "Code"],
             },
             {
                 "id": "gpt-4o",
                 "name": "GPT-4o",
+                "provider": "openai",
                 "badge": "🧠 Flagship Multimodal",
-                "description": "OpenAI's flagship omni model for complex programming, analysis, and multimodal input.",
+                "description": "OpenAI's flagship omni model for complex programming, analysis, and image input.",
+                "supports_vision": True,
+                "supports_reasoning": True,
+                "supports_search": True,
+                "is_fast": False,
+                "context_window": 128000,
+                "max_output_tokens": 4096,
+                "capabilities": ["Vision", "Reasoning", "Code"],
             },
             {
                 "id": "o3-mini",
                 "name": "o3-mini (Reasoning)",
+                "provider": "openai",
                 "badge": "🔬 STEM / Logic",
-                "description": "Specialized reasoning model with deep step-by-step thinking.",
+                "description": "Specialized reasoning text model with deep step-by-step thinking.",
+                "supports_vision": False,
+                "supports_reasoning": True,
+                "supports_search": False,
+                "is_fast": False,
+                "context_window": 200000,
+                "max_output_tokens": 8192,
+                "capabilities": ["Reasoning", "STEM / Logic"],
             },
         ],
     },
@@ -112,31 +200,63 @@ PROVIDERS: dict[str, dict[str, Any]] = {
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
         "api_key_env": "GEMINI_API_KEY",
         "key_url": "https://aistudio.google.com/app/apikey",
-        "default_model": "gemini-3.8-flash",
+        "default_model": "gemini-2.5-flash",
         "models": [
             {
                 "id": "gemini-2.5-flash",
                 "name": "Gemini 2.5 Flash",
-                "badge": "⚡ Blazing Fast",
-                "description": "Google's modern high-speed multimodal model with advanced reasoning.",
+                "provider": "gemini",
+                "badge": "⚡ Blazing Fast Multimodal",
+                "description": "Google's ultra-fast multimodal model with 1M token context, reasoning, and image analysis.",
+                "supports_vision": True,
+                "supports_reasoning": False,
+                "supports_search": True,
+                "is_fast": True,
+                "context_window": 1048576,
+                "max_output_tokens": 8192,
+                "capabilities": ["Vision", "Fast", "1M Context"],
             },
             {
                 "id": "gemini-2.5-pro",
                 "name": "Gemini 2.5 Pro",
-                "badge": "🧠 Deep Analysis",
-                "description": "Massive context window with advanced multimodal and reasoning capabilities.",
+                "provider": "gemini",
+                "badge": "🧠 Deep Analysis & Vision",
+                "description": "2M token context window with advanced multimodal image understanding and reasoning.",
+                "supports_vision": True,
+                "supports_reasoning": True,
+                "supports_search": True,
+                "is_fast": False,
+                "context_window": 2097152,
+                "max_output_tokens": 8192,
+                "capabilities": ["Vision", "Reasoning", "2M Context"],
             },
             {
                 "id": "gemini-3.8-flash",
                 "name": "Gemini 3.8 Flash",
+                "provider": "gemini",
                 "badge": "⚡ Next-Gen Flash",
-                "description": "Next-generation Gemini model built for low latency and high accuracy.",
+                "description": "Next-generation Gemini model built for low latency, image analysis, and high accuracy.",
+                "supports_vision": True,
+                "supports_reasoning": False,
+                "supports_search": True,
+                "is_fast": True,
+                "context_window": 1048576,
+                "max_output_tokens": 8192,
+                "capabilities": ["Vision", "Fast", "Multimodal"],
             },
             {
                 "id": "gemini-flash-latest",
                 "name": "Gemini Flash (Latest)",
+                "provider": "gemini",
                 "badge": "⚡ Stable Latest",
-                "description": "Latest stable production release of Gemini Flash.",
+                "description": "Latest stable production release of Gemini Flash with image analysis.",
+                "supports_vision": True,
+                "supports_reasoning": False,
+                "supports_search": True,
+                "is_fast": True,
+                "context_window": 1048576,
+                "max_output_tokens": 8192,
+                "capabilities": ["Vision", "Fast"],
             },
         ],
     },
@@ -157,6 +277,161 @@ def get_provider_config(provider_name: str) -> dict:
     """Retrieve static configuration for a provider."""
     p_lower = (provider_name or "").lower().strip()
     return PROVIDERS.get(p_lower, PROVIDERS["groq"])
+
+
+def get_model_metadata(provider: str, model: str) -> dict[str, Any]:
+    """Retrieve verified capabilities and limits for a specific provider and model."""
+    p_lower = (provider or "").lower().strip()
+    m_lower = (model or "").lower().strip()
+    pconfig = PROVIDERS.get(p_lower)
+    if pconfig:
+        for m in pconfig.get("models", []):
+            if m["id"].lower() == m_lower or m["id"].lower().endswith(m_lower) or m_lower.endswith(m["id"].lower()):
+                return dict(m)
+
+    # Fallback heuristics for custom or Ollama models
+    is_vision = any(sig in m_lower for sig in ("vision", "llava", "minicpm-v", "moondream", "qwen2-vl", "vl-"))
+    is_reasoning = any(sig in m_lower for sig in ("r1", "reason", "o1", "o3", "deepseek-r", "think"))
+    return {
+        "id": model,
+        "name": model,
+        "provider": p_lower,
+        "badge": "Custom",
+        "description": "Provider model",
+        "supports_vision": is_vision,
+        "supports_reasoning": is_reasoning,
+        "supports_search": True,
+        "is_fast": not is_reasoning,
+        "context_window": 131072 if p_lower != "ollama" else int(os.getenv("CONTEXT_TOKENS", "8192")),
+        "max_output_tokens": 4096,
+        "capabilities": (["Vision"] if is_vision else []) + (["Reasoning"] if is_reasoning else ["Fast"]),
+    }
+
+
+def get_vision_capable_models(healthy_providers: list[str] | None = None) -> list[dict]:
+    """Return all configured models capable of image analysis."""
+    result = []
+    allowed_providers = [p.lower() for p in healthy_providers] if healthy_providers else [p for p in PROVIDERS if is_provider_configured(p)]
+    for pid in allowed_providers:
+        pcfg = PROVIDERS.get(pid)
+        if not pcfg:
+            continue
+        for m in pcfg.get("models", []):
+            if m.get("supports_vision"):
+                result.append(dict(m))
+    return result
+
+
+def select_auto_model(
+    has_images: bool,
+    has_documents: bool,
+    is_web_search: bool,
+    content: str,
+    healthy_providers: list[str] | None = None,
+) -> tuple[str, str, str]:
+    """
+    Intelligently select the best model from configured, healthy providers.
+    Returns: (provider_id, model_id, routing_explanation)
+
+    Routing Rules:
+    1. Image attachment -> Model that verified accepts image input (Gemini, GPT-4o, Claude 3.5 Sonnet).
+    2. PDF/DOCX/CSV/Code attachment -> Large-context text model with structured extraction capability.
+    3. Web search -> Model well-grounded for citation and source-based answering.
+    4. Complex coding/math/reasoning -> Frontier reasoning model (DeepSeek R1, GPT-OSS 120B, o3-mini, Gemini Pro).
+    5. General chat -> Fast, economical text model (GPT-OSS 20B/120B, Gemini Flash, GPT-4o Mini).
+    """
+    # 1. Determine available pool of providers
+    if healthy_providers:
+        configured = [p.lower() for p in healthy_providers if is_provider_configured(p)]
+    else:
+        configured = [p for p in PROVIDERS if is_provider_configured(p)]
+
+    if not configured:
+        # Fallback default
+        return "groq", "openai/gpt-oss-120b", "Default fallback (Groq GPT-OSS 120B)"
+
+    # Helper to check if a specific provider is available
+    def has_p(name: str) -> bool:
+        return name in configured
+
+    # 1. Image Attachment Routing
+    if has_images:
+        if has_p("gemini"):
+            return "gemini", "gemini-2.5-flash", "Auto: Gemini 2.5 Flash selected for high-speed multimodal image understanding."
+        if has_p("openai"):
+            return "openai", "gpt-4o-mini", "Auto: GPT-4o Mini selected for fast image analysis."
+        if has_p("openrouter"):
+            return "openrouter", "anthropic/claude-3.5-sonnet", "Auto: Claude 3.5 Sonnet selected for precision visual inspection."
+        if has_p("ollama"):
+            # Check if any vision model is present
+            return "ollama", "llama3.2-vision", "Auto: Ollama Vision selected for local image analysis."
+        # If no vision provider configured, raise or route to first available with an informative error
+        raise ValueError("No vision-capable AI provider (Google Gemini or OpenAI) is configured on this server to analyze images.")
+
+    # 2. PDF / DOCX / CSV / Code Document Routing
+    if has_documents:
+        if has_p("gemini"):
+            return "gemini", "gemini-2.5-flash", "Auto: Gemini 2.5 Flash selected for large-context document comprehension (1M tokens)."
+        if has_p("groq"):
+            return "groq", "openai/gpt-oss-120b", "Auto: GPT-OSS 120B selected for high-speed document synthesis."
+        if has_p("openai"):
+            return "openai", "gpt-4o-mini", "Auto: GPT-4o Mini selected for structured document extraction."
+        if has_p("openrouter"):
+            return "openrouter", "meta-llama/llama-3.3-70b-instruct", "Auto: Llama 3.3 70B selected for document analysis."
+        if has_p("ollama"):
+            return "ollama", settings.OLLAMA_MODEL, "Auto: Local model selected for document analysis."
+
+    # 3. Web Search Routing
+    if is_web_search:
+        if has_p("groq"):
+            return "groq", "openai/gpt-oss-120b", "Auto: GPT-OSS 120B selected for fast citation-grounded web search answering."
+        if has_p("gemini"):
+            return "gemini", "gemini-2.5-flash", "Auto: Gemini 2.5 Flash selected for web search analysis."
+        if has_p("openai"):
+            return "openai", "gpt-4o-mini", "Auto: GPT-4o Mini selected for web search grounding."
+        if has_p("openrouter"):
+            return "openrouter", "meta-llama/llama-3.3-70b-instruct", "Auto: Llama 3.3 70B selected for web search grounding."
+        if has_p("ollama"):
+            return "ollama", settings.OLLAMA_MODEL, "Auto: Local model selected for web search."
+
+    # 4. Complex Coding / Deep Reasoning Detection
+    text_lower = (content or "").lower()
+    reasoning_keywords = (
+        "prove", "step by step", "algorithm", "derivation", "derive",
+        "calculate", "theorem", "math", "complexity", "time complexity",
+        "refactor", "debug", "traceback", "stack trace", "memory leak",
+        "deadlock", "race condition", "regex", "sql query", "architecture"
+    )
+    has_code_block = "```" in content or "def " in content or "function " in content or "class " in content
+    is_reasoning_prompt = has_code_block or any(kw in text_lower for kw in reasoning_keywords)
+
+    if is_reasoning_prompt:
+        if has_p("openrouter"):
+            return "openrouter", "deepseek/deepseek-r1", "Auto: DeepSeek R1 selected for deep step-by-step reasoning."
+        if has_p("groq"):
+            return "groq", "openai/gpt-oss-120b", "Auto: GPT-OSS 120B selected for complex logic and coding."
+        if has_p("openai"):
+            return "openai", "o3-mini", "Auto: o3-mini selected for deep STEM and logic reasoning."
+        if has_p("gemini"):
+            return "gemini", "gemini-2.5-pro", "Auto: Gemini 2.5 Pro selected for deep analytical reasoning."
+        if has_p("ollama"):
+            return "ollama", settings.OLLAMA_MODEL, "Auto: Local model selected."
+
+    # 5. General Chat -> Fast & Economical
+    if has_p("groq"):
+        return "groq", "openai/gpt-oss-20b", "Auto: GPT-OSS 20B selected for ultra-fast conversational response (500+ tok/s)."
+    if has_p("gemini"):
+        return "gemini", "gemini-2.5-flash", "Auto: Gemini 2.5 Flash selected for low latency and high accuracy."
+    if has_p("openai"):
+        return "openai", "gpt-4o-mini", "Auto: GPT-4o Mini selected for fast and responsive chat."
+    if has_p("openrouter"):
+        return "openrouter", "meta-llama/llama-3.3-70b-instruct", "Auto: Llama 3.3 70B selected for general chat."
+    if has_p("ollama"):
+        return "ollama", settings.OLLAMA_MODEL, "Auto: Local model selected."
+
+    # Fallback to first configured
+    first_p = configured[0]
+    return first_p, PROVIDERS[first_p]["default_model"], f"Auto: {first_p} default selected."
 
 
 def get_api_key(provider_name: str) -> str | None:

@@ -179,11 +179,13 @@ def extract_file_content(file_path: Path, filename: str) -> tuple[str, int, bool
 
 def check_vision_support(provider: str, model: str) -> tuple[bool, str]:
     """
-    Check if the provider & model support image input.
+    Check if the provider & model support image input using verified per-model capability metadata.
     Returns (is_supported, explanation_if_not).
     """
-    p = provider.lower()
-    m = model.lower()
+    from .providers import get_model_metadata, get_vision_capable_models
+
+    p = (provider or '').lower().strip()
+    m = (model or '').lower().strip()
 
     if p == 'ollama':
         is_supported = any(sig in m for sig in KNOWN_OLLAMA_VISION_MODELS)
@@ -191,16 +193,27 @@ def check_vision_support(provider: str, model: str) -> tuple[bool, str]:
             return (
                 False,
                 f"The selected Ollama model '{model}' does not support vision or image analysis. "
-                f"Please switch to a vision-capable model (such as llama3.2-vision or llava) or attach a document/text file instead."
+                f"Please switch to Auto, select a vision-capable model (such as llama3.2-vision or llava), or attach a document instead."
             )
         return True, ""
 
-    # Cloud providers
-    is_cloud_vision = any(sig in m for sig in CLOUD_VISION_MODELS)
-    if not is_cloud_vision:
+    # Verified capability lookup
+    metadata = get_model_metadata(p, model)
+    if metadata.get("supports_vision"):
+        return True, ""
+
+    # Offer verified compatible models currently configured
+    vision_models = get_vision_capable_models()
+    if vision_models:
+        names = ", ".join(f"{vm['name']} ({vm['provider'].title()})" for vm in vision_models[:3])
         return (
             False,
             f"The selected model '{model}' on {provider.title()} does not support image analysis. "
-            f"Please switch to a vision model (like GPT-4o, Gemini 2.0 Flash, or Claude 3.5 Sonnet) or attach a document/text file."
+            f"Switch to Auto or select a vision-capable model (such as {names}) to analyze this image."
         )
-    return True, ""
+
+    return (
+        False,
+        f"The selected model '{model}' on {provider.title()} does not support image analysis. "
+        f"Configure Google Gemini (GEMINI_API_KEY) or OpenAI (OPENAI_API_KEY) to enable image analysis."
+    )

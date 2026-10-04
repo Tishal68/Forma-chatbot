@@ -21,6 +21,12 @@ export interface ModelDetail {
   name: string;
   badge?: string;
   description?: string;
+  supports_vision?: boolean;
+  supports_reasoning?: boolean;
+  supports_search?: boolean;
+  is_fast?: boolean;
+  capabilities?: string[];
+  provider?: string;
 }
 
 export interface ProviderInfo {
@@ -33,6 +39,7 @@ export interface ProviderInfo {
   error?: string | null;
   default_model: string;
   key_url?: string;
+  models?: ModelDetail[];
 }
 
 export interface ModelsResponse {
@@ -41,4 +48,10 @@ export interface ModelsResponse {
   models: string[];
   model_details: ModelDetail[];
   default: string;
+  auto?: {
+    id: string;
+    name: string;
+    badge: string;
+    description: string;
+  };
 }

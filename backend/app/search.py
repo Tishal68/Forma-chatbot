@@ -157,19 +157,28 @@ async def perform_search(query: str, max_results: int = 5) -> list[dict]:
     return await search_duckduckgo(query, max_results)
 
 
-def format_search_context(query: str, results: list[dict]) -> str:
-    """Format search results cleanly for LLM system prompt context."""
-    blocks = [f'### Web Search Results for: "{query}"\n']
+def format_search_context(query: str, results: list[dict], max_total_chars: int = 2500) -> str:
+    """Format search results cleanly for LLM system prompt context, strictly bounded to prevent context budget blowouts."""
+    blocks = [f'### Web Search Results for: "{query}"\n\n']
+    chars_used = len(blocks[0])
+
     for idx, r in enumerate(results, 1):
-        blocks.append(
+        snippet = (r.get("snippet") or "").strip()
+        if len(snippet) > 280:
+            snippet = snippet[:280] + "…"
+        item = (
             f'[{idx}] Title: {r["title"]}\n'
             f'    URL: {r["url"]}\n'
-            f'    Summary: {r["snippet"]}\n'
+            f'    Summary: {snippet}\n\n'
         )
+        if chars_used + len(item) > max_total_chars and idx > 2:
+            break
+        blocks.append(item)
+        chars_used += len(item)
 
     blocks.append(
-        '\n**Guidelines for using search results**:\n'
-        '1. Use the above real search results to answer the user query.\n'
+        '**Guidelines for using search results**:\n'
+        '1. Answer the user query using the above real search results.\n'
         '2. Cite sources using clickable Markdown links: [Source Title](URL).\n'
         '3. Explicitly distinguish information retrieved from these search results from your general model knowledge.\n'
         '4. Never invent or hallucinate URLs or facts not present in the sources.\n'

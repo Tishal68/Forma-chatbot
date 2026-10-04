@@ -1,6 +1,5 @@
 import React from "react";
 import {
-  CircleHelp,
   MessageSquare,
   PanelLeftClose,
   Pencil,
@@ -28,7 +27,7 @@ interface SidebarProps {
   checking: boolean;
   ready: boolean;
   onOpenSettings: () => void;
-  onOpenHelp: () => void;
+  onOpenHelp?: () => void;
 }
 
 function groupDate(dateStr: string): string {
@@ -64,7 +63,6 @@ export function Sidebar({
   checking,
   ready,
   onOpenSettings,
-  onOpenHelp,
 }: SidebarProps) {
   const dateGroups = ["Today", "Yesterday", "Previous 7 days", "Older"];
 
@@ -181,31 +179,13 @@ export function Sidebar({
         </nav>
 
         <div className="sidebar-footer">
-          <div className="local-note">
+          <button className="settings-button" onClick={onOpenSettings} title="Settings, guide & diagnostics">
+            <Settings size={17} />
+            <span>Settings</span>
             <span
-              className={
-                connected ? "connection-dot" : "connection-dot offline"
-              }
+              className={connected && ready ? "connection-dot" : "connection-dot offline"}
+              title={ready ? "Connected & Ready" : "Setup needed"}
             />
-            <div>
-              <strong>
-                {checking
-                  ? "Checking connection…"
-                  : ready
-                    ? "Ready to chat"
-                    : "Setup needed"}
-              </strong>
-              <small>Private workspace</small>
-            </div>
-          </div>
-          <div style={{ fontSize: "11px", color: "var(--muted)", padding: "4px 8px 6px", lineHeight: "1.35", opacity: 0.85 }}>
-            🔒 Chats are private to this browser session and may be lost if cookies are cleared.
-          </div>
-          <button className="settings-button" onClick={onOpenSettings}>
-            <Settings size={17} /> Settings
-          </button>
-          <button className="settings-button" onClick={onOpenHelp}>
-            <CircleHelp size={17} /> Quick guide
           </button>
         </div>
       </aside>

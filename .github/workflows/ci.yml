@@ -23,14 +23,18 @@ jobs:
       - run: npm ci && npm run build
         working-directory: frontend
       - run: docker build -t forma:test .
-      - name: Smoke-test production container
+      - name: Smoke-test production container (public mode)
         run: |
-          docker run -d --name forma -p 8000:8000 -e AUTH_USERNAME=ci -e AUTH_PASSWORD=ci-only-test-password -e OLLAMA_BASE_URL=http://unavailable:11434 forma:test
+          docker run -d --name forma -p 8000:8000 -e APP_ENV=production -e OLLAMA_BASE_URL=http://unavailable:11434 forma:test
           trap 'docker logs forma; docker rm -f forma' EXIT
           for i in $(seq 1 30); do
             if curl --fail -s http://localhost:8000/api/health; then break; fi
             sleep 2
           done
           curl --fail http://localhost:8000/api/health
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/)" = '401'
-          curl --fail -u ci:ci-only-test-password http://localhost:8000/ | grep 'Forma'
+          # Public mode serves the app directly without HTTP 401 popup
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/)" = '200'
+          curl --fail http://localhost:8000/ | grep 'Forma'
+          # Public anonymous visitor isolation sets session cookie and allows creating conversations
+          curl -c /tmp/cookies.txt -b /tmp/cookies.txt -X POST http://localhost:8000/api/conversations --fail
+

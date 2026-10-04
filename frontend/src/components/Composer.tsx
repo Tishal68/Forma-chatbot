@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   ArrowDown,
   Code2,
@@ -9,7 +9,6 @@ import {
   Loader2,
   Paperclip,
   Send,
-  SlidersHorizontal,
   Square,
   X,
 } from "lucide-react";
@@ -89,10 +88,19 @@ export function Composer({
   onRemoveAttachment,
   webSearch,
   onToggleWebSearch,
-  onOpenSettings,
 }: ComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
+
+  // Auto-resize textarea based on content
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (el) {
+      el.style.height = "auto";
+      const newHeight = Math.min(el.scrollHeight, 180);
+      el.style.height = `${Math.max(newHeight, 32)}px`;
+    }
+  }, [input, textareaRef]);
 
   const hasUploading = attachments.some((a) => a.uploading);
   const canSend = (input.trim() || attachments.length > 0) && !loading && !busy && ready && !hasUploading;
@@ -125,30 +133,26 @@ export function Composer({
           <div>
             <strong>
               {checking
-                ? "Getting your workspace ready…"
+                ? "Checking server models…"
                 : connected
-                  ? "Choose your first AI model"
+                  ? "Choose your AI model"
                   : "Let’s connect your assistant"}
             </strong>
             <p>
               {checking
-                ? "Checking your AI connection."
+                ? "Connecting to configured AI providers."
                 : connected
-                  ? "A one-time model download is needed before your first chat."
+                  ? "Select a model or keep Auto to begin chatting."
                   : localWorkspace
-                    ? "Open Ollama on this computer, then check the connection."
-                    : "Ask the workspace owner to check the AI server connection, then try again."}
+                    ? "Start Ollama or configure a cloud provider key in backend environment."
+                    : "Configure at least one AI provider in your deployment settings."}
             </p>
           </div>
           <button
             disabled={checking}
             onClick={connected ? onOpenHelp : onCheckConnection}
           >
-            {checking
-              ? "Checking…"
-              : connected
-                ? "Setup guide"
-                : "Check again"}
+            {checking ? "Checking…" : "Setup"}
           </button>
         </div>
       )}
@@ -282,16 +286,6 @@ export function Composer({
             >
               <Globe size={18} />
               {webSearch && <span className="active-dot" />}
-            </button>
-
-            <button
-              type="button"
-              className="tool-button"
-              aria-label="Adjust parameters & settings"
-              title="Parameters (Creativity, model, settings)"
-              onClick={onOpenSettings}
-            >
-              <SlidersHorizontal size={18} />
             </button>
           </div>
 
