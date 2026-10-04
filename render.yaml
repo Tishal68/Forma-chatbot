@@ -17,7 +17,7 @@ services:
       - key: ATTACHMENTS_DIR
         value: /var/data/attachments
       - key: AUTH_USERNAME
-        sync: false
+        value: admin
       - key: AUTH_PASSWORD
         generateValue: true
       - key: OLLAMA_BASE_URL

@@ -46,11 +46,21 @@ async def lifespan(app: FastAPI):
     """Application startup and shutdown management."""
     if settings.is_production:
         if not settings.AUTH_USERNAME or len(settings.AUTH_PASSWORD) < 16:
+            log.critical(
+                'FATAL: Production requires AUTH_USERNAME and AUTH_PASSWORD (at least 16 characters). '
+                'AUTH_USERNAME: %r, AUTH_PASSWORD length: %d',
+                settings.AUTH_USERNAME,
+                len(settings.AUTH_PASSWORD),
+            )
             raise RuntimeError(
                 'Production requires AUTH_USERNAME and AUTH_PASSWORD (at least 16 characters).'
             )
         configured_any = any(is_provider_configured(p) for p in PROVIDERS)
         if not configured_any:
+            log.critical(
+                'FATAL: Production requires at least one configured AI provider. '
+                'Set GROQ_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY, OPENAI_API_KEY, or OLLAMA_BASE_URL.'
+            )
             raise RuntimeError(
                 'Production requires at least one configured AI provider. '
                 'Set GROQ_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY, OPENAI_API_KEY, or OLLAMA_BASE_URL.'
