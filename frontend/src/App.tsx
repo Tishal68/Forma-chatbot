@@ -589,6 +589,31 @@ export function App() {
     }
   }, []);
 
+  const toggleTheme = useCallback(() => {
+    setTheme((curr) => {
+      const isDark = document.documentElement.dataset.theme === "dark";
+      return isDark ? "light" : "dark";
+    });
+  }, []);
+
+  const exportChat = useCallback(() => {
+    if (messages.length === 0) return;
+    const currentTitle = chats.find((c) => c.id === id)?.title || "Forma Conversation";
+    let md = `# ${currentTitle}\n\n`;
+    for (const m of messages) {
+      const roleName = m.role === "assistant" ? "Forma" : "You";
+      const modelTag = m.model ? ` (${m.model})` : "";
+      md += `### ${roleName}${modelTag}\n\n${m.content}\n\n`;
+    }
+    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${currentTitle.replace(/[^a-zA-Z0-9_-]/g, "_")}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [messages, chats, id]);
+
   const title = chats.find((c) => c.id === id)?.title || "New conversation";
 
   return (
@@ -633,6 +658,9 @@ export function App() {
             const chat = chats.find((c) => c.id === id);
             if (chat) renameChat(chat);
           }}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          onExportChat={exportChat}
         />
 
         <div
@@ -649,8 +677,9 @@ export function App() {
             <div className="loading">Loading conversation…</div>
           ) : messages.length === 0 ? (
             <WelcomeView
-              onSelectPrompt={(prompt) => {
+              onSelectPrompt={(prompt, autoWebSearch) => {
                 setInput(prompt);
+                if (autoWebSearch) setWebSearch(true);
                 textarea.current?.focus();
               }}
             />

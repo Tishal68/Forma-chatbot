@@ -1,5 +1,21 @@
-import React, { useState, useRef, useEffect } from "react";
-import { Check, ChevronDown, Eye, FileText, Globe, PanelLeft, Pencil, Plus, Sparkles, Zap } from "lucide-react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
+import {
+  Check,
+  ChevronDown,
+  Download,
+  Eye,
+  FileText,
+  Globe,
+  Moon,
+  PanelLeft,
+  Pencil,
+  Plus,
+  Search,
+  Sparkles,
+  Sun,
+  X,
+  Zap,
+} from "lucide-react";
 import { ModelDetail, ProviderInfo } from "../types";
 
 interface HeaderProps {
@@ -19,6 +35,9 @@ interface HeaderProps {
   onSelectModel?: (provider: string, model: string) => void;
   onNewChat: () => void;
   onRename?: () => void;
+  theme?: string;
+  onToggleTheme?: () => void;
+  onExportChat?: () => void;
 }
 
 export function Header({
@@ -38,23 +57,46 @@ export function Header({
   onSelectModel,
   onNewChat,
   onRename,
+  theme = "system",
+  onToggleTheme,
+  onExportChat,
 }: HeaderProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState<"all" | "vision" | "reasoning" | "fast" | "local">("all");
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const displayTitle = messagesCount ? title : "Your thinking space";
 
-  // Close dropdown on click outside
+  // Focus search input when dropdown opens
+  useEffect(() => {
+    if (dropdownOpen) {
+      setTimeout(() => searchInputRef.current?.focus(), 50);
+    } else {
+      setSearchQuery("");
+      setActiveFilter("all");
+    }
+  }, [dropdownOpen]);
+
+  // Close dropdown on click outside or escape key
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setDropdownOpen(false);
       }
     }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape" && dropdownOpen) {
+        setDropdownOpen(false);
+      }
+    }
     if (dropdownOpen) {
       document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("keydown", handleKeyDown);
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
     };
   }, [dropdownOpen]);
 
@@ -69,6 +111,42 @@ export function Header({
       ? `${currentDetail.name}`
       : model || "Choose model";
 
+  // Filter models inside the menu based on search and capability filters
+  const filteredProviders = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    return providers.map((p) => {
+      const pModels = (p.models && p.models.length > 0)
+        ? p.models
+        : (provider === p.id ? modelDetails : []);
+
+      const matchingModels = pModels.filter((m) => {
+        // Capability filter
+        if (activeFilter === "vision" && !m.supports_vision) return false;
+        if (activeFilter === "reasoning" && !m.supports_reasoning) return false;
+        if (activeFilter === "fast" && !m.is_fast) return false;
+        if (activeFilter === "local" && m.provider !== "ollama") return false;
+
+        // Search query filter
+        if (!q) return true;
+        return (
+          m.name.toLowerCase().includes(q) ||
+          m.id.toLowerCase().includes(q) ||
+          (m.description && m.description.toLowerCase().includes(q)) ||
+          p.name.toLowerCase().includes(q)
+        );
+      });
+
+      return {
+        ...p,
+        filteredModels: matchingModels,
+      };
+    });
+  }, [providers, provider, modelDetails, searchQuery, activeFilter]);
+
+  const totalFilteredModels = useMemo(() => {
+    return filteredProviders.reduce((acc, p) => acc + p.filteredModels.length, 0);
+  }, [filteredProviders]);
+
   return (
     <header className="topbar">
       <div className="header-left">
@@ -77,6 +155,7 @@ export function Header({
             className="icon-button"
             aria-label="Open sidebar"
             onClick={onOpenSidebar}
+            title="Open conversations sidebar (Ctrl + Shift + O)"
           >
             <PanelLeft size={20} />
           </button>
@@ -120,82 +199,120 @@ export function Header({
 
           {dropdownOpen && (
             <div className="unified-menu" role="menu">
-              {/* Option: Auto Smart Routing */}
-              <div
-                className={`unified-menu-item auto-item ${isAuto ? "active" : ""}`}
-                role="menuitem"
-                tabIndex={0}
-                onClick={() => {
-                  if (onSelectModel) {
-                    onSelectModel("auto", "auto");
-                  } else {
-                    onProviderChange("auto");
-                    onModelChange("auto");
-                  }
-                  setDropdownOpen(false);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    if (onSelectModel) {
-                      onSelectModel("auto", "auto");
-                    } else {
-                      onProviderChange("auto");
-                      onModelChange("auto");
-                    }
-                    setDropdownOpen(false);
-                  }
-                }}
-              >
-                <div className="menu-item-left">
-                  <div className="menu-item-title">
-                    <Sparkles size={14} style={{ color: "var(--accent)" }} />
-                    <strong>Auto (Smart Routing)</strong>
-                    <span className="tag-badge default-badge">Recommended</span>
-                  </div>
-                  <div className="menu-item-desc">
-                    Intelligently routes between vision, reasoning, web search, or fast chat based on your task.
-                  </div>
-                </div>
-                {isAuto && <Check size={16} className="active-check" />}
+              {/* Menu Search Bar */}
+              <div className="menu-search-box">
+                <Search size={14} className="menu-search-icon" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  placeholder="Filter models or providers…"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="menu-search-input"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    className="menu-search-clear"
+                    onClick={() => setSearchQuery("")}
+                    aria-label="Clear search"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
               </div>
 
-              <div className="unified-menu-divider" />
+              {/* Capability Filter Chips */}
+              <div className="menu-filter-chips">
+                {(["all", "vision", "reasoning", "fast", "local"] as const).map((filterKey) => (
+                  <button
+                    key={filterKey}
+                    type="button"
+                    className={`filter-chip ${activeFilter === filterKey ? "active" : ""}`}
+                    onClick={() => setActiveFilter(filterKey)}
+                  >
+                    {filterKey === "all" && "All"}
+                    {filterKey === "vision" && "👁️ Vision"}
+                    {filterKey === "reasoning" && "🧠 Reasoning"}
+                    {filterKey === "fast" && "⚡ Fast"}
+                    {filterKey === "local" && "🖥️ Local"}
+                  </button>
+                ))}
+              </div>
+
+              {/* Option: Auto Smart Routing (shown when no specific search query or matching 'auto') */}
+              {(!searchQuery || "auto smart routing".includes(searchQuery.toLowerCase())) && activeFilter === "all" && (
+                <>
+                  <div
+                    className={`unified-menu-item auto-item ${isAuto ? "active" : ""}`}
+                    role="menuitem"
+                    tabIndex={0}
+                    onClick={() => {
+                      if (onSelectModel) {
+                        onSelectModel("auto", "auto");
+                      } else {
+                        onProviderChange("auto");
+                        onModelChange("auto");
+                      }
+                      setDropdownOpen(false);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        if (onSelectModel) {
+                          onSelectModel("auto", "auto");
+                        } else {
+                          onProviderChange("auto");
+                          onModelChange("auto");
+                        }
+                        setDropdownOpen(false);
+                      }
+                    }}
+                  >
+                    <div className="menu-item-left">
+                      <div className="menu-item-title">
+                        <Sparkles size={14} style={{ color: "var(--accent)" }} />
+                        <strong>Auto (Smart Routing)</strong>
+                        <span className="tag-badge default-badge">Recommended</span>
+                      </div>
+                      <div className="menu-item-desc">
+                        Intelligently chooses the best model for chat, coding, search, documents, or images.
+                      </div>
+                    </div>
+                    {isAuto && <Check size={16} className="active-check" />}
+                  </div>
+
+                  <div className="unified-menu-divider" />
+                </>
+              )}
 
               {/* Grouped by Provider */}
               <div className="unified-menu-providers">
-                {providers.map((p) => {
-                  const pModels = p.models && p.models.length > 0
-                    ? p.models
-                    : (provider === p.id ? modelDetails : []);
+                {totalFilteredModels === 0 ? (
+                  <div className="menu-empty-filter">
+                    No models match your filter. Try another keyword.
+                  </div>
+                ) : (
+                  filteredProviders.map((p) => {
+                    if (p.filteredModels.length === 0) return null;
 
-                  return (
-                    <div key={p.id} className="provider-group">
-                      <div className="provider-group-header">
-                        <span>{p.name}</span>
-                        {!p.working && p.status && (
-                          <span className="provider-status-tag">{p.status}</span>
-                        )}
-                      </div>
-                      <div className="provider-model-list">
-                        {pModels.map((m) => {
-                          const isCurrentActive = !isAuto && provider === p.id && model === m.id;
-                          return (
-                            <div
-                              key={m.id}
-                              className={`unified-menu-item model-item ${isCurrentActive ? "active" : ""}`}
-                              role="menuitem"
-                              tabIndex={0}
-                              onClick={() => {
-                                if (onSelectModel) {
-                                  onSelectModel(p.id, m.id);
-                                } else {
-                                  onProviderChange(p.id);
-                                  onModelChange(m.id);
-                                }
-                                setDropdownOpen(false);
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter" || e.key === " ") {
+                    return (
+                      <div key={p.id} className="provider-group">
+                        <div className="provider-group-header">
+                          <span>{p.name}</span>
+                          {!p.working && p.status && (
+                            <span className="provider-status-tag">{p.status}</span>
+                          )}
+                        </div>
+                        <div className="provider-model-list">
+                          {p.filteredModels.map((m) => {
+                            const isCurrentActive = !isAuto && provider === p.id && model === m.id;
+                            return (
+                              <div
+                                key={m.id}
+                                className={`unified-menu-item model-item ${isCurrentActive ? "active" : ""}`}
+                                role="menuitem"
+                                tabIndex={0}
+                                onClick={() => {
                                   if (onSelectModel) {
                                     onSelectModel(p.id, m.id);
                                   } else {
@@ -203,62 +320,98 @@ export function Header({
                                     onModelChange(m.id);
                                   }
                                   setDropdownOpen(false);
-                                }
-                              }}
-                            >
-                              <div className="menu-item-left">
-                                <div className="menu-item-title">
-                                  <span>{m.name}</span>
-                                  {m.badge && <span className="tag-badge">{m.badge}</span>}
-                                  {/* Capability tags */}
-                                  <div className="capability-tags">
-                                    {m.supports_vision && (
-                                      <span className="cap-tag vision" title="Supports image analysis">
-                                        <Eye size={10} /> Vision
-                                      </span>
-                                    )}
-                                    {m.supports_reasoning && (
-                                      <span className="cap-tag reasoning" title="Specialized in deep reasoning & coding">
-                                        <Sparkles size={10} /> Reasoning
-                                      </span>
-                                    )}
-                                    {m.is_fast && (
-                                      <span className="cap-tag fast" title="Ultra-low latency">
-                                        <Zap size={10} /> Fast
-                                      </span>
-                                    )}
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    if (onSelectModel) {
+                                      onSelectModel(p.id, m.id);
+                                    } else {
+                                      onProviderChange(p.id);
+                                      onModelChange(m.id);
+                                    }
+                                    setDropdownOpen(false);
+                                  }
+                                }}
+                              >
+                                <div className="menu-item-left">
+                                  <div className="menu-item-title">
+                                    <span>{m.name}</span>
+                                    {m.badge && <span className="tag-badge">{m.badge}</span>}
+                                    {/* Capability tags */}
+                                    <div className="capability-tags">
+                                      {m.supports_vision && (
+                                        <span className="cap-tag vision" title="Supports image analysis">
+                                          <Eye size={10} /> Vision
+                                        </span>
+                                      )}
+                                      {m.supports_reasoning && (
+                                        <span className="cap-tag reasoning" title="Specialized in deep reasoning & coding">
+                                          <Sparkles size={10} /> Reasoning
+                                        </span>
+                                      )}
+                                      {m.is_fast && (
+                                        <span className="cap-tag fast" title="Ultra-low latency">
+                                          <Zap size={10} /> Fast
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
+                                  {m.description && (
+                                    <div className="menu-item-desc">{m.description}</div>
+                                  )}
                                 </div>
-                                {m.description && (
-                                  <div className="menu-item-desc">{m.description}</div>
-                                )}
+                                {isCurrentActive && <Check size={16} className="active-check" />}
                               </div>
-                              {isCurrentActive && <Check size={16} className="active-check" />}
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </div>
           )}
         </div>
 
-        {/* Header New Chat: Shown when sidebar is closed so users can always start a new chat */}
-        {!sidebar && (
+        {/* Quick Export Conversation Button: Useful for saving conversations */}
+        {messagesCount > 0 && onExportChat && (
           <button
-            className="header-new"
-            onClick={onNewChat}
+            type="button"
+            className="icon-button header-export-btn"
+            onClick={onExportChat}
             disabled={busy}
-            aria-label="Start new chat"
-            title="New chat · Ctrl + Shift + O"
+            aria-label="Export chat as Markdown"
+            title="Export conversation as Markdown (.md)"
           >
-            <Plus size={17} />
-            <span>New chat</span>
+            <Download size={17} />
           </button>
         )}
+
+        {/* Quick Theme Switcher Button */}
+        {onToggleTheme && (
+          <button
+            type="button"
+            className="icon-button header-theme-btn"
+            onClick={onToggleTheme}
+            aria-label={`Current theme: ${theme}. Click to switch theme.`}
+            title={`Theme: ${theme.toUpperCase()} (Click to toggle)`}
+          >
+            {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
+          </button>
+        )}
+
+        {/* Always Visible New Chat Button */}
+        <button
+          className="header-new"
+          onClick={onNewChat}
+          disabled={busy}
+          aria-label="Start new chat"
+          title="New chat · Ctrl + Shift + O"
+        >
+          <Plus size={16} />
+          <span className="header-new-text">New chat</span>
+        </button>
       </div>
     </header>
   );

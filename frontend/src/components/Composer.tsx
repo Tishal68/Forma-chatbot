@@ -269,29 +269,46 @@ export function Composer({
           <div className="composer-tools">
             <button
               type="button"
-              className="tool-button"
+              className={`tool-button ${attachments.length > 0 ? "has-files" : ""}`}
               aria-label="Attach files (PDF, DOCX, CSV, TXT, Code, Images)"
               title="Attach files (PDF, DOCX, CSV, TXT, Code, Images)"
               onClick={() => fileInputRef.current?.click()}
             >
-              <Paperclip size={18} />
+              <Paperclip size={17} />
+              <span className="tool-label">Attach</span>
+              {attachments.length > 0 && (
+                <span className="tool-badge">{attachments.length}</span>
+              )}
             </button>
 
             <button
               type="button"
-              className={`tool-button ${webSearch ? "active" : ""}`}
+              className={`tool-button web-search-toggle ${webSearch ? "active" : ""}`}
               aria-label={webSearch ? "Web search: Enabled (Click to disable)" : "Web search: Disabled (Click to enable)"}
-              title={webSearch ? "Web search: ON (Real internet search)" : "Web search: OFF (Click to enable)"}
+              title={webSearch ? "Web search: ON (Real internet search enabled)" : "Web search: OFF (Click to search real-time web)"}
               onClick={onToggleWebSearch}
             >
-              <Globe size={18} />
+              <Globe size={17} />
+              <span className="tool-label">{webSearch ? "Search ON" : "Search"}</span>
               {webSearch && <span className="active-dot" />}
             </button>
           </div>
 
           <div className="composer-actions">
+            {input.trim().length > 0 && !busy && (
+              <button
+                type="button"
+                className="clear-input-btn"
+                onClick={() => onInputChange("")}
+                title="Clear prompt"
+                aria-label="Clear prompt"
+              >
+                <X size={14} />
+              </button>
+            )}
+
             <span className="send-hint">
-              Enter to send
+              Enter ↵
             </span>
 
             {busy ? (
@@ -302,15 +319,15 @@ export function Composer({
                 title="Stop generation"
                 aria-label="Stop generation"
               >
-                <Square size={15} fill="currentColor" />
+                <Square size={14} fill="currentColor" />
                 <span>Stop</span>
               </button>
             ) : (
               <button
                 type="submit"
-                className="send primary-send"
+                className={`send primary-send ${canSend ? "can-send" : ""}`}
                 disabled={!canSend}
-                title="Send message (Enter)"
+                title={canSend ? "Send message (Enter)" : "Type a message or attach a file to send"}
                 aria-label="Send message"
               >
                 <Send size={15} />

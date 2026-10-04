@@ -102,11 +102,11 @@ export function Sidebar({
           <Search size={16} />
           <input
             aria-label="Search conversations"
-            placeholder="Search conversations"
+            placeholder={chats.length > 0 ? `Search ${chats.length} conversations…` : "Search conversations…"}
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
           />
-          {search && (
+          {search ? (
             <button
               className="clear-search"
               aria-label="Clear search"
@@ -114,7 +114,11 @@ export function Sidebar({
             >
               <X size={14} />
             </button>
-          )}
+          ) : chats.length > 0 ? (
+            <span className="chat-count-tag" title={`${chats.length} saved chats`}>
+              {chats.length}
+            </span>
+          ) : null}
         </label>
 
         <nav className="history">
