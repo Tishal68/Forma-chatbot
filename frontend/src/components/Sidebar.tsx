@@ -194,8 +194,11 @@ export function Sidebar({
                     ? "Ready to chat"
                     : "Setup needed"}
               </strong>
-              <small>Private workspace · Ollama</small>
+              <small>Private workspace</small>
             </div>
+          </div>
+          <div style={{ fontSize: "11px", color: "var(--muted)", padding: "4px 8px 6px", lineHeight: "1.35", opacity: 0.85 }}>
+            🔒 Chats are private to this browser session and may be lost if cookies are cleared.
           </div>
           <button className="settings-button" onClick={onOpenSettings}>
             <Settings size={17} /> Settings

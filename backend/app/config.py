@@ -78,6 +78,89 @@ class Settings:
     def SERPAPI_API_KEY(self) -> str:
         return os.getenv('SERPAPI_API_KEY', '')
 
+    # Session & Security Settings
+    @property
+    def SESSION_COOKIE_NAME(self) -> str:
+        return os.getenv('SESSION_COOKIE_NAME', 'forma_session')
+
+    @property
+    def CSRF_COOKIE_NAME(self) -> str:
+        return os.getenv('CSRF_COOKIE_NAME', 'forma_csrf')
+
+    @property
+    def SESSION_SECRET(self) -> str:
+        secret = os.getenv('SESSION_SECRET', '')
+        if not secret:
+            secret_file = ROOT / 'data' / '.session_secret'
+            if secret_file.exists():
+                try:
+                    cached = secret_file.read_text(encoding='utf-8').strip()
+                    if cached:
+                        return cached
+                except OSError:
+                    pass
+            import secrets
+            generated = secrets.token_hex(32)
+            try:
+                secret_file.parent.mkdir(parents=True, exist_ok=True)
+                secret_file.write_text(generated, encoding='utf-8')
+            except OSError:
+                pass
+            return generated
+        return secret
+
+    @property
+    def SESSION_MAX_AGE_SECONDS(self) -> int:
+        return int(os.getenv('SESSION_MAX_AGE_SECONDS', str(365 * 24 * 3600)))
+
+    @property
+    def TRUSTED_PROXIES(self) -> set[str]:
+        raw = os.getenv('TRUSTED_PROXIES', '127.0.0.1,::1')
+        return {p.strip() for p in raw.split(',') if p.strip()}
+
+    # Rate Limiting & Spending Controls
+    @property
+    def RATE_LIMIT_CHAT_PER_MINUTE(self) -> int:
+        return int(os.getenv('RATE_LIMIT_CHAT_PER_MINUTE', '30'))
+
+    @property
+    def RATE_LIMIT_VISITOR_CHAT_PER_MINUTE(self) -> int:
+        return int(os.getenv('RATE_LIMIT_VISITOR_CHAT_PER_MINUTE', '15'))
+
+    @property
+    def RATE_LIMIT_VISITOR_CHAT_PER_DAY(self) -> int:
+        return int(os.getenv('RATE_LIMIT_VISITOR_CHAT_PER_DAY', '200'))
+
+    @property
+    def RATE_LIMIT_ATTACHMENTS_PER_MINUTE(self) -> int:
+        return int(os.getenv('RATE_LIMIT_ATTACHMENTS_PER_MINUTE', '40'))
+
+    @property
+    def RATE_LIMIT_GENERAL_PER_MINUTE(self) -> int:
+        return int(os.getenv('RATE_LIMIT_GENERAL_PER_MINUTE', '240'))
+
+    # Concurrency & Storage Limits
+    @property
+    def MAX_CONCURRENT_PER_VISITOR(self) -> int:
+        return int(os.getenv('MAX_CONCURRENT_PER_VISITOR', '1'))
+
+    @property
+    def MAX_CONCURRENT_GLOBAL(self) -> int:
+        return int(os.getenv('MAX_CONCURRENT_GLOBAL', '10'))
+
+    @property
+    def MAX_VISITOR_STORAGE_BYTES(self) -> int:
+        mb = int(os.getenv('MAX_VISITOR_STORAGE_MB', '100'))
+        return mb * 1024 * 1024
+
+    @property
+    def MAX_ATTACHMENTS_PER_CONVERSATION(self) -> int:
+        return int(os.getenv('MAX_ATTACHMENTS_PER_CONVERSATION', '20'))
+
+    @property
+    def MAX_CONVERSATIONS_PER_VISITOR(self) -> int:
+        return int(os.getenv('MAX_CONVERSATIONS_PER_VISITOR', '100'))
+
 
 settings = Settings()
 

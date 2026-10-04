@@ -29,7 +29,8 @@ def initialize():
         db.executescript('''
         CREATE TABLE IF NOT EXISTS conversations (
           id TEXT PRIMARY KEY, title TEXT NOT NULL, created_at TEXT NOT NULL,
-          updated_at TEXT NOT NULL, summary TEXT NOT NULL DEFAULT '', summary_through INTEGER NOT NULL DEFAULT 0);
+          updated_at TEXT NOT NULL, summary TEXT NOT NULL DEFAULT '', summary_through INTEGER NOT NULL DEFAULT 0,
+          visitor_id TEXT NOT NULL DEFAULT '');
 
         CREATE TABLE IF NOT EXISTS messages (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,6 +61,15 @@ def initialize():
         ''')
 
         # Safely migrate existing tables if columns are missing
+        conv_columns = [r['name'] for r in db.execute('PRAGMA table_info(conversations)').fetchall()]
+        if 'visitor_id' not in conv_columns:
+            db.execute("ALTER TABLE conversations ADD COLUMN visitor_id TEXT NOT NULL DEFAULT ''")
+
+        # Preserve existing pre-migration conversations in a private legacy archive
+        # Anonymous visitors are never assigned '__legacy_archive__', so existing data remains strictly hidden
+        db.execute("UPDATE conversations SET visitor_id = '__legacy_archive__' WHERE visitor_id = '' OR visitor_id IS NULL")
+        db.execute("CREATE INDEX IF NOT EXISTS conversations_visitor ON conversations(visitor_id)")
+
         msg_columns = [r['name'] for r in db.execute('PRAGMA table_info(messages)').fetchall()]
         if 'sources' not in msg_columns:
             db.execute('ALTER TABLE messages ADD COLUMN sources TEXT')

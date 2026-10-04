@@ -40,6 +40,12 @@ export type Conversation = {
   pending_attachments?: Attachment[];
 };
 
+function getCsrfToken(): string {
+  if (typeof document === "undefined") return "";
+  const match = document.cookie.match(/(^|;\s*)forma_csrf=([^;]+)/);
+  return match ? decodeURIComponent(match[2]) : "";
+}
+
 export async function uploadAttachment(
   cid: string,
   file: File,
@@ -51,6 +57,10 @@ export async function uploadAttachment(
     formData.append("file", file);
 
     xhr.open("POST", `/api/conversations/${cid}/attachments`);
+    const csrf = getCsrfToken();
+    if (csrf) {
+      xhr.setRequestHeader("X-CSRF-Token", csrf);
+    }
 
     if (xhr.upload && onProgress) {
       xhr.upload.onprogress = (e) => {
@@ -98,11 +108,16 @@ export async function api<T>(
   let response: Response;
   try {
     const isFormData = options.body instanceof FormData;
+    const csrf = getCsrfToken();
+    const defaultHeaders: Record<string, string> = isFormData
+      ? {}
+      : { "Content-Type": "application/json" };
+    if (csrf) {
+      defaultHeaders["X-CSRF-Token"] = csrf;
+    }
     response = await fetch("/api" + path, {
       ...options,
-      headers: isFormData
-        ? options.headers
-        : { "Content-Type": "application/json", ...options.headers },
+      headers: { ...defaultHeaders, ...options.headers },
     });
   } catch {
     throw new Error(
@@ -125,9 +140,14 @@ export async function streamChat(
   signal: AbortSignal,
   receive: (event: any) => void,
 ) {
+  const csrf = getCsrfToken();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (csrf) {
+    headers["X-CSRF-Token"] = csrf;
+  }
   const response = await fetch("/api/chat", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(body),
     signal,
   });

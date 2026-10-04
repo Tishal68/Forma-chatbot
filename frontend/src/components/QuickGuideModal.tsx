@@ -66,8 +66,9 @@ export function QuickGuideModal({
         <li>
           <strong>Pick up where you left off</strong>
           <p>
-            Chats save automatically. Use the sidebar to search, rename, or
-            reopen them. Your last chat reopens on refresh.
+            Chats save automatically and are kept strictly private to your browser
+            session. If you clear your browser cookies or site data, your anonymous
+            session will reset.
           </p>
         </li>
       </ol>

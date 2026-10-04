@@ -12,7 +12,7 @@ from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
-from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -28,12 +28,23 @@ from .providers import (
     probe_provider_health,
 )
 from .search import SearchError, format_search_context, perform_search
-from .security import apply_security_headers, check_rate_limit, get_allowed_origins, get_client_ip, verify_basic_auth
+from .security import (
+    apply_security_headers,
+    check_rate_limit,
+    generate_csrf_token,
+    generate_visitor_id,
+    get_allowed_origins,
+    get_client_ip,
+    sign_session_token,
+    verify_basic_auth,
+    verify_session_token,
+)
 
 log = logging.getLogger('forma')
 
-# Active generation tasks mapped by conversation ID
+# Active generation tasks mapped by conversation ID and owner visitor ID
 active: dict[str, asyncio.Task] = {}
+active_task_owners: dict[str, str] = {}
 
 
 def now() -> str:
@@ -86,22 +97,44 @@ async def security_middleware(request: Request, call_next):
     """
     Unified enterprise security middleware:
     - Enforces HTTPS upgrade when behind a proxy
-    - Rate limits public endpoints to protect against DDoS, scraping, and token exhaustion
+    - Resolves and verifies cryptographically signed visitor session cookie (or creates new)
+    - Enforces multi-dimensional rate limiting & AI spending controls (per-IP and per-visitor)
     - Enforces constant-time HTTP Basic Auth if credentials are configured
-    - Enforces Origin validation for state-modifying requests
+    - Enforces Origin and CSRF validation for state-modifying requests
     - Attaches comprehensive security hardening headers (HSTS, CSP, X-Frame-Options, XSS)
+    - Sets secure, HttpOnly, SameSite session cookies on responses
     """
     if settings.is_production and request.headers.get('x-forwarded-proto') == 'http':
         https_url = request.url.replace(scheme='https')
         return RedirectResponse(str(https_url), status_code=308)
 
-    # 1. Rate limiting defense (Industry standard for public AI APIs)
+    # 1. Visitor Session & CSRF Resolution
+    session_cookie = request.cookies.get(settings.SESSION_COOKIE_NAME)
+    visitor_id = verify_session_token(session_cookie)
+    new_session = False
+    if not visitor_id:
+        visitor_id = generate_visitor_id()
+        new_session = True
+    request.state.visitor_id = visitor_id
+    request.state.new_session = new_session
+
+    csrf_cookie = request.cookies.get(settings.CSRF_COOKIE_NAME)
+    new_csrf = False
+    if not csrf_cookie or len(csrf_cookie) < 16:
+        csrf_cookie = generate_csrf_token()
+        new_csrf = True
+    request.state.csrf_token = csrf_cookie
+    request.state.new_csrf = new_csrf
+
+    # 2. Rate limiting defense (per-IP and per-visitor spending control)
     if request.url.path != '/api/health':
         client_ip = get_client_ip(request)
-        is_allowed, retry_after = check_rate_limit(client_ip, request.url.path)
+        is_allowed, retry_after, detail = check_rate_limit(
+            client_ip, visitor_id, request.url.path, return_detail=True
+        )
         if not is_allowed:
             return JSONResponse(
-                {'detail': 'Rate limit exceeded. Please wait a moment before sending more requests.'},
+                {'detail': detail or 'Rate limit exceeded. Please wait a moment before sending more requests.'},
                 status_code=429,
                 headers={
                     'Retry-After': str(retry_after),
@@ -109,7 +142,7 @@ async def security_middleware(request: Request, call_next):
                 },
             )
 
-    # 2. Optional HTTP Basic Auth: only enforced if both username and password are set
+    # 3. Optional HTTP Basic Auth: only enforced if both username and password are set
     username = settings.AUTH_USERNAME
     password = settings.AUTH_PASSWORD
     if username and password and request.url.path != '/api/health':
@@ -124,15 +157,62 @@ async def security_middleware(request: Request, call_next):
                 },
             )
 
-    origin = request.headers.get('origin')
-    if request.method not in ('GET', 'HEAD', 'OPTIONS') and origin:
+    # 4. Origin & CSRF validation for state-modifying requests
+    if request.method not in ('GET', 'HEAD', 'OPTIONS'):
+        origin = request.headers.get('origin')
         allowed = get_allowed_origins()
-        if origin not in allowed:
-            return JSONResponse({'detail': 'Origin not allowed.'}, status_code=403)
+        if origin:
+            if origin not in allowed:
+                return JSONResponse({'detail': 'Origin not allowed.'}, status_code=403)
+        else:
+            referer = request.headers.get('referer')
+            if referer:
+                try:
+                    import urllib.parse
+                    parsed_ref = urllib.parse.urlparse(referer)
+                    ref_origin = f"{parsed_ref.scheme}://{parsed_ref.netloc}"
+                    if ref_origin not in allowed:
+                        return JSONResponse({'detail': 'Origin not allowed.'}, status_code=403)
+                except Exception:
+                    pass
+
+        # Validate CSRF token if header provided
+        header_csrf = request.headers.get('x-csrf-token')
+        if header_csrf and csrf_cookie:
+            import secrets
+            if not secrets.compare_digest(header_csrf, csrf_cookie):
+                return JSONResponse({'detail': 'Invalid CSRF token.'}, status_code=403)
 
     response = await call_next(request)
 
     is_https = request.url.scheme == 'https' or request.headers.get('x-forwarded-proto') == 'https'
+    is_secure = settings.is_production or is_https
+
+    # Set session cookie if new or rotated
+    if request.state.new_session:
+        signed_token = sign_session_token(visitor_id)
+        response.set_cookie(
+            key=settings.SESSION_COOKIE_NAME,
+            value=signed_token,
+            max_age=settings.SESSION_MAX_AGE_SECONDS,
+            httponly=True,
+            samesite='lax',
+            secure=is_secure,
+            path='/',
+        )
+
+    # Set CSRF cookie if new or rotated
+    if request.state.new_csrf:
+        response.set_cookie(
+            key=settings.CSRF_COOKIE_NAME,
+            value=csrf_cookie,
+            max_age=settings.SESSION_MAX_AGE_SECONDS,
+            httponly=False,
+            samesite='lax',
+            secure=is_secure,
+            path='/',
+        )
+
     apply_security_headers(response, is_production=settings.is_production, is_https=is_https)
 
     if request.url.path.startswith('/api/'):
@@ -150,9 +230,14 @@ async def database_error_handler(request: Request, exc: sqlite3.Error):
     )
 
 
-def get_conversation_or_404(cid: str) -> dict:
+def get_conversation_or_404(cid: str, visitor_id: str) -> dict:
+    if not visitor_id or visitor_id == '__legacy_archive__':
+        raise HTTPException(status_code=404, detail='Conversation not found.')
     with connect() as db:
-        row = db.execute('SELECT * FROM conversations WHERE id = ?', (cid,)).fetchone()
+        row = db.execute(
+            'SELECT * FROM conversations WHERE id = ? AND visitor_id = ?',
+            (cid, visitor_id),
+        ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail='Conversation not found.')
     return dict(row)
@@ -162,6 +247,7 @@ def assert_conversation_idle(cid: str):
     if cid in active:
         if active[cid].done():
             active.pop(cid, None)
+            active_task_owners.pop(cid, None)
         else:
             raise HTTPException(
                 status_code=409,
@@ -316,41 +402,55 @@ async def list_models(provider: str | None = None, refresh: bool = False):
 
 
 @app.get('/api/conversations')
-async def list_conversations(q: str = ''):
-    """List conversations with optional title/content search."""
+async def list_conversations(request: Request, q: str = ''):
+    """List conversations for the current visitor with optional title/content search."""
+    visitor_id = request.state.visitor_id
     search_term = f'%{q[:200]}%'
     with connect() as db:
         rows = db.execute(
             '''
             SELECT c.* FROM conversations c
-            WHERE c.title LIKE ? OR EXISTS (
-                SELECT 1 FROM messages m
-                WHERE m.conversation_id = c.id AND m.content LIKE ?
+            WHERE c.visitor_id = ? AND (
+                c.title LIKE ? OR EXISTS (
+                    SELECT 1 FROM messages m
+                    WHERE m.conversation_id = c.id AND m.content LIKE ?
+                )
             )
             ORDER BY c.updated_at DESC
             ''',
-            (search_term, search_term),
+            (visitor_id, search_term, search_term),
         ).fetchall()
         return [dict(r) for r in rows]
 
 
 @app.post('/api/conversations', status_code=201)
-async def create_conversation():
-    """Create a new empty conversation."""
-    cid = str(uuid.uuid4())
-    stamp = now()
+async def create_conversation(request: Request):
+    """Create a new empty conversation for the current visitor."""
+    visitor_id = request.state.visitor_id
     with connect() as db:
+        count = db.execute(
+            'SELECT COUNT(*) FROM conversations WHERE visitor_id = ?',
+            (visitor_id,),
+        ).fetchone()[0]
+        if count >= settings.MAX_CONVERSATIONS_PER_VISITOR:
+            raise HTTPException(
+                status_code=400,
+                detail=f'Conversation limit of {settings.MAX_CONVERSATIONS_PER_VISITOR} reached for this session. Please delete older chats.',
+            )
+        cid = str(uuid.uuid4())
+        stamp = now()
         db.execute(
-            'INSERT INTO conversations(id, title, created_at, updated_at) VALUES (?, ?, ?, ?)',
-            (cid, 'New chat', stamp, stamp),
+            'INSERT INTO conversations(id, title, created_at, updated_at, visitor_id) VALUES (?, ?, ?, ?, ?)',
+            (cid, 'New chat', stamp, stamp, visitor_id),
         )
-    return get_conversation_or_404(cid)
+    return get_conversation_or_404(cid, visitor_id)
 
 
 @app.get('/api/conversations/{cid}')
-async def get_conversation(cid: str):
+async def get_conversation(cid: str, request: Request):
     """Retrieve conversation details including all messages, attachments, and web sources."""
-    result = get_conversation_or_404(cid)
+    visitor_id = request.state.visitor_id
+    result = get_conversation_or_404(cid, visitor_id)
     with connect() as db:
         messages = db.execute(
             'SELECT * FROM messages WHERE conversation_id = ? ORDER BY id',
@@ -399,27 +499,29 @@ class RenamePayload(BaseModel):
 
 
 @app.patch('/api/conversations/{cid}')
-async def rename_conversation(cid: str, body: RenamePayload):
+async def rename_conversation(cid: str, body: RenamePayload, request: Request):
     """Rename a conversation title."""
-    get_conversation_or_404(cid)
+    visitor_id = request.state.visitor_id
+    get_conversation_or_404(cid, visitor_id)
     new_title = body.title.strip()
     if not new_title:
         raise HTTPException(status_code=422, detail='Title cannot be empty.')
     with connect() as db:
         db.execute(
-            'UPDATE conversations SET title = ?, updated_at = ? WHERE id = ?',
-            (new_title, now(), cid),
+            'UPDATE conversations SET title = ?, updated_at = ? WHERE id = ? AND visitor_id = ?',
+            (new_title, now(), cid, visitor_id),
         )
-    return get_conversation_or_404(cid)
+    return get_conversation_or_404(cid, visitor_id)
 
 
 @app.delete('/api/conversations/{cid}')
-async def delete_conversation(cid: str):
+async def delete_conversation(cid: str, request: Request):
     """Delete a single conversation and its associated files."""
+    visitor_id = request.state.visitor_id
     assert_conversation_idle(cid)
-    get_conversation_or_404(cid)
+    get_conversation_or_404(cid, visitor_id)
     with connect() as db:
-        db.execute('DELETE FROM conversations WHERE id = ?', (cid,))
+        db.execute('DELETE FROM conversations WHERE id = ? AND visitor_id = ?', (cid, visitor_id))
 
     # Clean up associated files on disk
     cid_folder = settings.ATTACHMENTS_DIR / cid
@@ -429,34 +531,65 @@ async def delete_conversation(cid: str):
 
 
 @app.delete('/api/conversations')
-async def clear_all_conversations():
-    """Clear all conversations and all stored attachment files."""
-    if active:
-        raise HTTPException(
-            status_code=409,
-            detail='Stop generation before clearing chats.',
-        )
+async def clear_all_conversations(request: Request):
+    """Clear all conversations and all stored attachment files for the current visitor."""
+    visitor_id = request.state.visitor_id
     with connect() as db:
-        db.execute('DELETE FROM conversations')
+        rows = db.execute(
+            'SELECT id FROM conversations WHERE visitor_id = ?',
+            (visitor_id,),
+        ).fetchall()
+        cids = [r['id'] for r in rows]
+        if not cids:
+            return {'ok': True}
 
-    # Remove all attachment files on disk
-    if settings.ATTACHMENTS_DIR.exists():
-        for item in settings.ATTACHMENTS_DIR.iterdir():
-            if item.is_dir():
-                shutil.rmtree(item, ignore_errors=True)
-            elif item.is_file():
-                try:
-                    item.unlink()
-                except OSError:
-                    pass
+        # Check if any conversation belonging to this visitor is actively generating
+        for cid in cids:
+            if cid in active and not active[cid].done():
+                raise HTTPException(
+                    status_code=409,
+                    detail='Stop active generation before clearing chats.',
+                )
+
+        db.execute('DELETE FROM conversations WHERE visitor_id = ?', (visitor_id,))
+
+    # Remove ONLY this visitor's attachment folders
+    for cid in cids:
+        cid_folder = settings.ATTACHMENTS_DIR / cid
+        if cid_folder.exists():
+            shutil.rmtree(cid_folder, ignore_errors=True)
+
     return {'ok': True}
 
 
 @app.post('/api/conversations/{cid}/attachments', status_code=201)
-async def upload_attachment(cid: str, file: UploadFile = File(...)):
+async def upload_attachment(cid: str, request: Request, file: UploadFile = File(...)):
     """Upload and validate an attachment for a conversation."""
-    get_conversation_or_404(cid)
+    visitor_id = request.state.visitor_id
+    get_conversation_or_404(cid, visitor_id)
     assert_conversation_idle(cid)
+
+    # Check conversation attachment count
+    with connect() as db:
+        att_count = db.execute(
+            'SELECT COUNT(*) FROM attachments WHERE conversation_id = ?',
+            (cid,),
+        ).fetchone()[0]
+        if att_count >= settings.MAX_ATTACHMENTS_PER_CONVERSATION:
+            raise HTTPException(
+                status_code=400,
+                detail=f'Maximum of {settings.MAX_ATTACHMENTS_PER_CONVERSATION} attachments per conversation reached.',
+            )
+        # Check total visitor storage usage
+        total_stored = db.execute(
+            '''
+            SELECT COALESCE(SUM(a.size_bytes), 0)
+            FROM attachments a
+            JOIN conversations c ON a.conversation_id = c.id
+            WHERE c.visitor_id = ?
+            ''',
+            (visitor_id,),
+        ).fetchone()[0]
 
     if not file.filename:
         raise HTTPException(status_code=400, detail='Missing filename.')
@@ -471,7 +604,14 @@ async def upload_attachment(cid: str, file: UploadFile = File(...)):
         mb = settings.MAX_ATTACHMENT_SIZE_BYTES // (1024 * 1024)
         raise HTTPException(
             status_code=400,
-            detail=f'File size exceeds the {mb}MB limit. Please upload a smaller file.'
+            detail=f'File size exceeds the {mb}MB limit. Please upload a smaller file.',
+        )
+
+    if total_stored + len(content) > settings.MAX_VISITOR_STORAGE_BYTES:
+        mb = settings.MAX_VISITOR_STORAGE_BYTES // (1024 * 1024)
+        raise HTTPException(
+            status_code=413,
+            detail=f'Storage limit of {mb}MB exceeded for this session. Please delete old files or conversations to free up space.',
         )
 
     safe_name = sanitize_filename(file.filename)
@@ -520,9 +660,10 @@ async def upload_attachment(cid: str, file: UploadFile = File(...)):
 
 
 @app.get('/api/conversations/{cid}/attachments')
-async def list_attachments(cid: str):
+async def list_attachments(cid: str, request: Request):
     """List attachments for a conversation."""
-    get_conversation_or_404(cid)
+    visitor_id = request.state.visitor_id
+    get_conversation_or_404(cid, visitor_id)
     with connect() as db:
         rows = db.execute(
             '''
@@ -535,10 +676,36 @@ async def list_attachments(cid: str):
         return [dict(r) for r in rows]
 
 
+@app.get('/api/conversations/{cid}/attachments/{aid}')
+@app.get('/api/conversations/{cid}/attachments/{aid}/download')
+async def download_attachment(cid: str, aid: str, request: Request):
+    """Download an attachment file belonging to the current visitor's conversation."""
+    visitor_id = request.state.visitor_id
+    get_conversation_or_404(cid, visitor_id)
+    with connect() as db:
+        row = db.execute(
+            'SELECT file_path, filename, content_type FROM attachments WHERE id = ? AND conversation_id = ?',
+            (aid, cid),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail='Attachment not found.')
+
+    file_path = Path(row['file_path'])
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail='Attachment file not found on disk.')
+
+    return FileResponse(
+        path=str(file_path),
+        filename=row['filename'],
+        media_type=row['content_type'],
+    )
+
+
 @app.delete('/api/conversations/{cid}/attachments/{aid}')
-async def delete_attachment(cid: str, aid: str):
+async def delete_attachment(cid: str, aid: str, request: Request):
     """Delete an attachment from database and disk."""
-    get_conversation_or_404(cid)
+    visitor_id = request.state.visitor_id
+    get_conversation_or_404(cid, visitor_id)
     with connect() as db:
         row = db.execute(
             'SELECT file_path FROM attachments WHERE id = ? AND conversation_id = ?',
@@ -559,8 +726,10 @@ async def delete_attachment(cid: str, aid: str):
 
 
 @app.post('/api/conversations/{cid}/stop')
-async def stop_generation(cid: str):
+async def stop_generation(cid: str, request: Request):
     """Cancel an active streaming generation."""
+    visitor_id = request.state.visitor_id
+    get_conversation_or_404(cid, visitor_id)
     task = active.get(cid)
     if task:
         task.cancel()
@@ -586,11 +755,31 @@ class ChatPayload(BaseModel):
 
 
 @app.post('/api/chat')
-async def stream_chat_response(body: ChatPayload):
+async def stream_chat_response(body: ChatPayload, request: Request):
     """Stream chat completion via Server-Sent Events (SSE)."""
+    visitor_id = request.state.visitor_id
     cid = body.conversation_id
-    conv = get_conversation_or_404(cid)
+    conv = get_conversation_or_404(cid, visitor_id)
     assert_conversation_idle(cid)
+
+    # Concurrency check per visitor
+    v_active = [
+        c for c, t in active.items()
+        if not t.done() and active_task_owners.get(c) == visitor_id
+    ]
+    if len(v_active) >= settings.MAX_CONCURRENT_PER_VISITOR:
+        raise HTTPException(
+            status_code=429,
+            detail='A generation is already in progress for your session. Please wait or stop the current generation.',
+        )
+
+    # Global concurrency check
+    g_active = [c for c, t in active.items() if not t.done()]
+    if len(g_active) >= settings.MAX_CONCURRENT_GLOBAL:
+        raise HTTPException(
+            status_code=429,
+            detail='The server is currently processing the maximum number of concurrent requests. Please try again in a few seconds.',
+        )
 
     # Attachments validation
     attachments = []
@@ -602,6 +791,8 @@ async def stream_chat_response(body: ChatPayload):
                 (*body.attachment_ids, cid),
             ).fetchall()
             attachments = [dict(r) for r in rows]
+            if len(attachments) != len(body.attachment_ids):
+                raise HTTPException(status_code=404, detail='One or more attachments not found.')
 
     if not body.regenerate and not body.content.strip() and not attachments:
         raise HTTPException(status_code=422, detail='Write a message or attach a file first.')
@@ -886,6 +1077,7 @@ async def stream_chat_response(body: ChatPayload):
                     db.execute('UPDATE conversations SET updated_at = ? WHERE id = ?', (now(), cid))
             finally:
                 active.pop(cid, None)
+                active_task_owners.pop(cid, None)
                 try:
                     queue.put_nowait({'type': 'done', status: status})
                 except asyncio.QueueFull:
@@ -893,6 +1085,7 @@ async def stream_chat_response(body: ChatPayload):
 
     task = asyncio.create_task(generate())
     active[cid] = task
+    active_task_owners[cid] = visitor_id
 
     async def event_stream():
         try:

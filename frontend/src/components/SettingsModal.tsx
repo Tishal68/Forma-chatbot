@@ -176,6 +176,10 @@ export function SettingsModal({
         <small>Lower for precision and code. Higher for creativity and brainstorming.</small>
       </label>
 
+      <div style={{ margin: "14px 0", padding: "10px 12px", borderRadius: "6px", background: "var(--surface)", border: "1px solid var(--border)", fontSize: "12px", color: "var(--muted)", lineHeight: "1.45" }}>
+        <strong>🔒 Private Browser Session:</strong> Anonymous conversations and files are privately tied to this browser's session cookie. They are not visible to anyone else, but may be lost if browser cookies or site data are cleared.
+      </div>
+
       <div className="danger-zone">
         <div>
           <strong>Clear all conversations</strong>
