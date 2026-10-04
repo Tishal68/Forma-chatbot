@@ -7,8 +7,6 @@ RUN npm run build
 
 FROM python:3.12-slim-bookworm AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PORT=8000 APP_ENV=production DATABASE_PATH=/var/data/chat.db \
-    AUTH_USERNAME=admin \
-    AUTH_PASSWORD=forma-production-secure-default-password-change-me \
     OLLAMA_BASE_URL=http://localhost:11434
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends gosu && rm -rf /var/lib/apt/lists/* \

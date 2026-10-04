@@ -28,7 +28,7 @@ from .providers import (
     probe_provider_health,
 )
 from .search import SearchError, format_search_context, perform_search
-from .security import apply_security_headers, get_allowed_origins, verify_basic_auth
+from .security import apply_security_headers, check_rate_limit, get_allowed_origins, get_client_ip, verify_basic_auth
 
 log = logging.getLogger('forma')
 
@@ -45,16 +45,19 @@ def now() -> str:
 async def lifespan(app: FastAPI):
     """Application startup and shutdown management."""
     if settings.is_production:
-        if not settings.AUTH_USERNAME or len(settings.AUTH_PASSWORD) < 16:
-            log.critical(
-                'FATAL: Production requires AUTH_USERNAME and AUTH_PASSWORD (at least 16 characters). '
-                'AUTH_USERNAME: %r, AUTH_PASSWORD length: %d',
-                settings.AUTH_USERNAME,
-                len(settings.AUTH_PASSWORD),
-            )
-            raise RuntimeError(
-                'Production requires AUTH_USERNAME and AUTH_PASSWORD (at least 16 characters).'
-            )
+        # Authentication is optional for public workspaces.
+        # If credentials are configured, enforce strict minimum 16-character password security.
+        if settings.AUTH_USERNAME or settings.AUTH_PASSWORD:
+            if not settings.AUTH_USERNAME or len(settings.AUTH_PASSWORD) < 16:
+                log.critical(
+                    'FATAL: Production requires AUTH_USERNAME and AUTH_PASSWORD (at least 16 characters). '
+                    'AUTH_USERNAME: %r, AUTH_PASSWORD length: %d',
+                    settings.AUTH_USERNAME,
+                    len(settings.AUTH_PASSWORD),
+                )
+                raise RuntimeError(
+                    'Production requires AUTH_USERNAME and AUTH_PASSWORD (at least 16 characters).'
+                )
         configured_any = any(is_provider_configured(p) for p in PROVIDERS)
         if not configured_any:
             log.warning(
@@ -81,19 +84,35 @@ app = FastAPI(
 @app.middleware('http')
 async def security_middleware(request: Request, call_next):
     """
-    Unified security middleware:
+    Unified enterprise security middleware:
     - Enforces HTTPS upgrade when behind a proxy
-    - Enforces constant-time HTTP Basic Auth for private workspaces
+    - Rate limits public endpoints to protect against DDoS, scraping, and token exhaustion
+    - Enforces constant-time HTTP Basic Auth if credentials are configured
     - Enforces Origin validation for state-modifying requests
-    - Attaches comprehensive security hardening headers (HSTS, CSP, X-Frame-Options)
+    - Attaches comprehensive security hardening headers (HSTS, CSP, X-Frame-Options, XSS)
     """
     if settings.is_production and request.headers.get('x-forwarded-proto') == 'http':
         https_url = request.url.replace(scheme='https')
         return RedirectResponse(str(https_url), status_code=308)
 
+    # 1. Rate limiting defense (Industry standard for public AI APIs)
+    if request.url.path != '/api/health':
+        client_ip = get_client_ip(request)
+        is_allowed, retry_after = check_rate_limit(client_ip, request.url.path)
+        if not is_allowed:
+            return JSONResponse(
+                {'detail': 'Rate limit exceeded. Please wait a moment before sending more requests.'},
+                status_code=429,
+                headers={
+                    'Retry-After': str(retry_after),
+                    'Cache-Control': 'no-store',
+                },
+            )
+
+    # 2. Optional HTTP Basic Auth: only enforced if both username and password are set
     username = settings.AUTH_USERNAME
     password = settings.AUTH_PASSWORD
-    if (username or password) and request.url.path != '/api/health':
+    if username and password and request.url.path != '/api/health':
         auth_header = request.headers.get('authorization')
         if not verify_basic_auth(auth_header, username, password):
             return JSONResponse(

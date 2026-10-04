@@ -19,10 +19,7 @@ class Settings:
 
     @property
     def AUTH_USERNAME(self) -> str:
-        val = os.getenv('AUTH_USERNAME', '')
-        if not val and self.is_production:
-            return 'admin'
-        return val
+        return os.getenv('AUTH_USERNAME', '').strip()
 
     @property
     def AUTH_PASSWORD(self) -> str:
