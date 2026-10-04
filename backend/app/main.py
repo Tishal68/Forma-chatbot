@@ -265,9 +265,9 @@ async def list_models(provider: str | None = None, refresh: bool = False):
             "key_url": pdata.get("key_url", ""),
         })
 
-    # Pick active provider: requested if configured, else first working, else first configured
+    # Pick active provider: explicitly requested provider if valid, else first working, else first configured
     req_p = (provider or "").lower().strip()
-    if req_p in all_configured:
+    if req_p in PROVIDERS:
         active_p = req_p
     elif working_providers:
         active_p = working_providers[0]

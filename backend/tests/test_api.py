@@ -77,6 +77,7 @@ def test_origin_guard(client):
 
 
 def test_cloud_providers_and_streaming(client, monkeypatch):
+    monkeypatch.setenv('GROQ_API_KEY', 'gsk_testkey')
     # Test listing models for Groq
     res = client.get('/api/models?provider=groq')
     assert res.status_code == 200
