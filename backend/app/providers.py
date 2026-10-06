@@ -524,6 +524,82 @@ def get_vision_capable_models(healthy_providers: list[str] | None = None) -> lis
     return result
 
 
+def installed_ollama_models() -> list[str]:
+    """Return list of currently installed Ollama model names from health cache or default settings."""
+    if "ollama" in _HEALTH_CACHE:
+        _, data = _HEALTH_CACHE["ollama"]
+        return list(data.get("models", []))
+    if settings.OLLAMA_MODEL:
+        return [settings.OLLAMA_MODEL]
+    return []
+
+
+def ollama_model_with(predicate) -> str | None:
+    """Return first installed Ollama model satisfying predicate(detail_dict)."""
+    for m in installed_ollama_models():
+        if predicate(get_ollama_model_detail(m)):
+            return m
+    return None
+
+
+def ollama_best_text(prefer_reasoning: bool = False) -> str | None:
+    """Return best available Ollama text model (prefers reasoning-capable if requested)."""
+    installed = installed_ollama_models()
+    if not installed:
+        return None
+    if prefer_reasoning:
+        for m in installed:
+            if get_ollama_model_detail(m).get("supports_reasoning"):
+                return m
+    return installed[0]
+
+
+def get_fallback_candidates(
+    current_provider: str,
+    current_model: str,
+    has_images: bool = False,
+    healthy_providers: list[str] | None = None,
+) -> list[tuple[str, str, str]]:
+    """
+    Returns ordered alternative (provider, model, auto_reason) candidates
+    that can be automatically shifted to if the primary model experiences high demand or errors.
+    """
+    configured = [p.lower() for p in (healthy_providers or PROVIDERS) if is_provider_configured(p)]
+    candidates: list[tuple[str, str, str]] = []
+
+    def add_candidate(p: str, m: str, reason: str):
+        if p in configured and not (p == current_provider and m == current_model):
+            if not any(cp == p and cm == m for cp, cm, _ in candidates):
+                candidates.append((p, m, reason))
+
+    if has_images:
+        # Multimodal vision fallbacks in order of speed and reliability
+        add_candidate("openrouter", "openai/gpt-4o-mini", "Auto-shifted to GPT-4o Mini (OpenRouter) for vision")
+        add_candidate("gemini", "gemini-flash-lite-latest", "Auto-shifted to Gemini Flash Lite for vision")
+        add_candidate("openrouter", "openai/gpt-4o", "Auto-shifted to GPT-4o (OpenRouter) for vision")
+        add_candidate("gemini", "gemini-3.5-flash-lite", "Auto-shifted to Gemini 3.5 Flash Lite for vision")
+        add_candidate("gemini", "gemini-3.6-flash", "Auto-shifted to Gemini 3.6 Flash for vision")
+        if "ollama" in configured:
+            vis_m = ollama_model_with(lambda d: d.get("supports_vision"))
+            if vis_m:
+                add_candidate("ollama", vis_m, f"Auto-shifted to local {vis_m} for vision")
+    else:
+        # High-performance text/coding/chat fallbacks across providers
+        add_candidate("groq", "openai/gpt-oss-120b", "Auto-shifted to GPT-OSS 120B (Groq) for high-speed response")
+        add_candidate("openrouter", "meta-llama/llama-3.3-70b-instruct", "Auto-shifted to Llama 3.3 70B (OpenRouter) for comprehensive reasoning")
+        add_candidate("gemini", "gemini-flash-lite-latest", "Auto-shifted to Gemini Flash Lite for fast response")
+        add_candidate("groq", "openai/gpt-oss-20b", "Auto-shifted to GPT-OSS 20B (Groq) for ultra-fast chat")
+        add_candidate("openrouter", "openai/gpt-4o-mini", "Auto-shifted to GPT-4o Mini (OpenRouter) for responsive chat")
+        add_candidate("gemini", "gemini-3.6-flash", "Auto-shifted to Gemini 3.6 Flash for advanced reasoning")
+        add_candidate("openrouter", "qwen/qwen-2.5-72b-instruct", "Auto-shifted to Qwen 2.5 72B (OpenRouter) for technical coding")
+        if "ollama" in configured:
+            txt_m = ollama_best_text()
+            if txt_m:
+                add_candidate("ollama", txt_m, f"Auto-shifted to local {txt_m}")
+
+    return candidates
+
+
 def select_auto_model(
     has_images: bool,
     has_documents: bool,
@@ -552,41 +628,10 @@ def select_auto_model(
         if has_images:
             raise ValueError(
                 "No vision-capable AI provider is configured on this server to analyze images. "
-                "Configure Gemini (GEMINI_API_KEY), OpenAI (OPENAI_API_KEY), or Ollama with a vision model."
+                "Configure Gemini (GEMINI_API_KEY), OpenRouter (OPENROUTER_API_KEY), or Ollama with a vision model."
             )
         return "groq", "openai/gpt-oss-120b", "Default fallback (Groq GPT-OSS 120B)"
 
-    def has_p(name: str) -> bool:
-        return name in configured
-
-    # --- Ollama helpers: read from health cache, no extra network call ---
-    def installed_ollama_models() -> list[str]:
-        if "ollama" in _HEALTH_CACHE:
-            _, data = _HEALTH_CACHE["ollama"]
-            return list(data.get("models", []))
-        if settings.OLLAMA_MODEL:
-            return [settings.OLLAMA_MODEL]
-        return []
-
-    def ollama_model_with(predicate) -> str | None:
-        """First installed Ollama model satisfying predicate(detail_dict)."""
-        for m in installed_ollama_models():
-            if predicate(get_ollama_model_detail(m)):
-                return m
-        return None
-
-    def ollama_best_text(prefer_reasoning: bool = False) -> str | None:
-        """Best available Ollama text model (prefers reasoning-capable if requested)."""
-        installed = installed_ollama_models()
-        if not installed:
-            return None
-        if prefer_reasoning:
-            for m in installed:
-                if get_ollama_model_detail(m).get("supports_reasoning"):
-                    return m
-        return installed[0]
-
-    # Helper to check if a specific provider is available
     def has_p(name: str) -> bool:
         return name in configured
 

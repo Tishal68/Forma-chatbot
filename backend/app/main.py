@@ -843,9 +843,9 @@ async def stream_chat_response(body: ChatPayload, request: Request):
     # Auto routing applies when both provider and model are auto/empty, or model is explicitly 'auto' without a specific provider
     is_auto = (req_provider in ('', 'auto') and req_model.lower() in ('', 'auto')) or (req_provider in ('', 'auto') and not req_model) or req_model.lower() == 'auto'
 
+    configured_providers = [p for p in PROVIDERS if is_provider_configured(p)]
     auto_explanation = ""
     if is_auto:
-        configured_providers = [p for p in PROVIDERS if is_provider_configured(p)]
         from .providers import select_auto_model
         try:
             provider, model, auto_explanation = select_auto_model(
@@ -999,144 +999,195 @@ async def stream_chat_response(body: ChatPayload, request: Request):
     async def generate():
         text = ''
         status = 'stopped'
-        is_cloud = provider != 'ollama'
         try:
-            await emit('start', message_id=mid, provider=provider, model=model, auto_reason=auto_explanation)
+            from .providers import get_fallback_candidates
+            candidates = [(provider, model, auto_explanation)]
+            if is_auto:
+                for fb_p, fb_m, fb_reason in get_fallback_candidates(
+                    current_provider=provider,
+                    current_model=model,
+                    has_images=has_images,
+                    healthy_providers=configured_providers,
+                ):
+                    candidates.append((fb_p, fb_m, fb_reason))
+
             if search_results:
                 await emit('sources', sources=search_results)
 
-            try:
-                try:
-                    client_instance = client(provider)
-                except TypeError:
-                    client_instance = client()
-            except Exception as e:
-                log.exception("Failed to initialize client for %s: %s", provider, e)
-                client_instance = client()
+            for cand_idx, (curr_provider, curr_model, curr_reason) in enumerate(candidates):
+                curr_is_cloud = curr_provider != 'ollama'
+                curr_pcfg = get_provider_config(curr_provider)
+                curr_tag = f"{curr_provider}:{curr_model}"
 
-            async with client_instance as c:
-                def save_summary(summary_text: str, through_id: int):
+                if cand_idx == 0:
+                    await emit('start', message_id=mid, provider=curr_provider, model=curr_model, auto_reason=curr_reason)
+                else:
                     with connect() as db:
                         db.execute(
-                            'UPDATE conversations SET summary = ?, summary_through = ? WHERE id = ?',
-                            (summary_text, through_id, cid),
+                            "UPDATE messages SET model = ?, auto_reason = ? WHERE id = ?",
+                            (curr_tag, curr_reason, mid),
+                        )
+                    await emit('shift', message_id=mid, provider=curr_provider, model=curr_model, auto_reason=curr_reason)
+                    await emit('status', message=f"Shifted to {curr_model} ({curr_pcfg['name']})…")
+
+                try:
+                    try:
+                        client_instance = client(curr_provider)
+                    except TypeError:
+                        client_instance = client()
+                except Exception as e:
+                    log.exception("Failed to initialize client for %s: %s", curr_provider, e)
+                    client_instance = client()
+
+                try:
+                    async with client_instance as c:
+                        def save_summary(summary_text: str, through_id: int):
+                            with connect() as db:
+                                db.execute(
+                                    'UPDATE conversations SET summary = ?, summary_through = ? WHERE id = ?',
+                                    (summary_text, through_id, cid),
+                                )
+
+                        async def notify(message: str):
+                            await emit('status', message=message)
+
+                        context = await build_context(
+                            c,
+                            curr_model,
+                            conv,
+                            history,
+                            save_summary,
+                            notify,
+                            is_openai_format=curr_is_cloud,
+                            provider=curr_provider,
                         )
 
-                async def notify(message: str):
-                    await emit('status', message=message)
+                        if curr_is_cloud:
+                            cloud_messages = [dict(m) for m in context]
+                            if image_b64s and cloud_messages:
+                                last_text = cloud_messages[-1]['content']
+                                multimodal_content = [{'type': 'text', 'text': last_text}]
+                                for img, b64 in zip(valid_image_attachments, image_b64s):
+                                    multimodal_content.append({
+                                        'type': 'image_url',
+                                        'image_url': {'url': f"data:{img['content_type']};base64,{b64}"}
+                                    })
+                                cloud_messages[-1]['content'] = multimodal_content
 
-                context = await build_context(
-                    c,
-                    model,
-                    conv,
-                    history,
-                    save_summary,
-                    notify,
-                    is_openai_format=is_cloud,
-                    provider=provider,
-                )
-
-                if is_cloud:
-                    cloud_messages = [dict(m) for m in context]
-                    if image_b64s and cloud_messages:
-                        last_text = cloud_messages[-1]['content']
-                        multimodal_content = [{'type': 'text', 'text': last_text}]
-                        for img, b64 in zip(valid_image_attachments, image_b64s):
-                            multimodal_content.append({
-                                'type': 'image_url',
-                                'image_url': {'url': f"data:{img['content_type']};base64,{b64}"}
-                            })
-                        cloud_messages[-1]['content'] = multimodal_content
-
-                    # OpenAI-compatible streaming (Groq, OpenAI, Gemini, OpenRouter)
-                    async with c.stream(
-                        'POST',
-                        '/chat/completions',
-                        json={
-                            'model': model,
-                            'messages': cloud_messages,
-                            'stream': True,
-                            'temperature': body.temperature,
-                            'max_tokens': min(settings.OUTPUT_TOKENS, 4096),
-                        },
-                    ) as response:
-                        if response.status_code >= 400:
-                            await response.aread()
-                        response.raise_for_status()
-                        async for line in response.aiter_lines():
-                            if not line:
-                                continue
-                            line_str = line.strip()
-                            if line_str.startswith('data: '):
-                                payload_str = line_str[6:].strip()
-                                if payload_str == '[DONE]':
-                                    status = 'complete'
-                                    break
-                                try:
-                                    item = json.loads(payload_str)
-                                    choices = item.get('choices', [])
-                                    if choices:
-                                        delta = choices[0].get('delta', {}).get('content', '')
-                                        if delta:
-                                            text += delta
-                                            await emit('token', content=delta)
-                                except json.JSONDecodeError:
-                                    continue
-                        status = 'complete'
-                else:
-                    # Native Ollama streaming
-                    ollama_messages = [dict(m) for m in context]
-                    if image_b64s and ollama_messages:
-                        ollama_messages[-1]['images'] = image_b64s
-
-                    async with c.stream(
-                        'POST',
-                        '/api/chat',
-                        json={
-                            'model': model,
-                            'messages': ollama_messages,
-                            'stream': True,
-                            'options': {
-                                'temperature': body.temperature,
-                                'num_ctx': settings.CONTEXT_TOKENS,
-                                'num_predict': settings.OUTPUT_TOKENS,
-                            },
-                        },
-                    ) as response:
-                        if response.status_code >= 400:
-                            await response.aread()
-                        response.raise_for_status()
-                        async for line in response.aiter_lines():
-                            if not line:
-                                continue
-                            try:
-                                item = json.loads(line)
-                            except json.JSONDecodeError:
-                                continue
-                            if item.get('error'):
-                                err_text = item.get('error')
-                                raise ValueError(
-                                    f'Ollama error: {err_text}'
-                                    if isinstance(err_text, str)
-                                    else 'Ollama could not generate a response. Check the selected model and server logs.'
-                                )
-                            delta = item.get('message', {}).get('content', '')
-                            if delta:
-                                text += delta
-                                await emit('token', content=delta)
-                            if item.get('done'):
+                            # OpenAI-compatible streaming (Groq, Gemini, OpenRouter)
+                            async with c.stream(
+                                'POST',
+                                '/chat/completions',
+                                json={
+                                    'model': curr_model,
+                                    'messages': cloud_messages,
+                                    'stream': True,
+                                    'temperature': body.temperature,
+                                    'max_tokens': min(settings.OUTPUT_TOKENS, 4096),
+                                },
+                            ) as response:
+                                if response.status_code >= 400:
+                                    await response.aread()
+                                response.raise_for_status()
+                                async for line in response.aiter_lines():
+                                    if not line:
+                                        continue
+                                    line_str = line.strip()
+                                    if line_str.startswith('data: '):
+                                        payload_str = line_str[6:].strip()
+                                        if payload_str == '[DONE]':
+                                            status = 'complete'
+                                            break
+                                        try:
+                                            item = json.loads(payload_str)
+                                            choices = item.get('choices', [])
+                                            if choices:
+                                                delta = choices[0].get('delta', {}).get('content', '')
+                                                if delta:
+                                                    text += delta
+                                                    await emit('token', content=delta)
+                                        except json.JSONDecodeError:
+                                            continue
                                 status = 'complete'
-                                break
+                        else:
+                            # Native Ollama streaming
+                            ollama_messages = [dict(m) for m in context]
+                            if image_b64s and ollama_messages:
+                                ollama_messages[-1]['images'] = image_b64s
 
-                    if status != 'complete':
-                        raise ValueError('The model connection closed early. You can retry this response.')
+                            async with c.stream(
+                                'POST',
+                                '/api/chat',
+                                json={
+                                    'model': curr_model,
+                                    'messages': ollama_messages,
+                                    'stream': True,
+                                    'options': {
+                                        'temperature': body.temperature,
+                                        'num_ctx': settings.CONTEXT_TOKENS,
+                                        'num_predict': settings.OUTPUT_TOKENS,
+                                    },
+                                },
+                            ) as response:
+                                if response.status_code >= 400:
+                                    await response.aread()
+                                response.raise_for_status()
+                                async for line in response.aiter_lines():
+                                    if not line:
+                                        continue
+                                    try:
+                                        item = json.loads(line)
+                                    except json.JSONDecodeError:
+                                        continue
+                                    if item.get('error'):
+                                        err_text = item.get('error')
+                                        raise ValueError(
+                                            f'Ollama error: {err_text}'
+                                            if isinstance(err_text, str)
+                                            else 'Ollama could not generate a response. Check the selected model and server logs.'
+                                        )
+                                    delta = item.get('message', {}).get('content', '')
+                                    if delta:
+                                        text += delta
+                                        await emit('token', content=delta)
+                                    if item.get('done'):
+                                        status = 'complete'
+                                        break
 
+                            if status != 'complete':
+                                raise ValueError('The model connection closed early. You can retry this response.')
+
+                        # Generation completed successfully
+                        break
+
+                except asyncio.CancelledError:
+                    status = 'stopped'
+                    break
+                except Exception as exc:
+                    if text:
+                        # Tokens were already streamed; do not restart mid-sentence
+                        status = 'error'
+                        log.exception('Generation failed after partial output')
+                        await emit('error', message=format_error_message(exc, curr_provider))
+                        break
+
+                    if cand_idx < len(candidates) - 1:
+                        next_p, next_m, _ = candidates[cand_idx + 1]
+                        next_pcfg = get_provider_config(next_p)
+                        log.warning(
+                            "Candidate %s:%s failed (%s). Auto-shifting to fallback candidate %s:%s",
+                            curr_provider, curr_model, exc, next_p, next_m
+                        )
+                        await emit('status', message=f"Shifted to {next_pcfg['name']} ({next_m})…")
+                        continue
+                    else:
+                        status = 'error'
+                        log.exception('All candidate models failed')
+                        await emit('error', message=format_error_message(exc, curr_provider))
+                        break
         except asyncio.CancelledError:
-            pass
-        except Exception as exc:
-            status = 'error'
-            log.exception('Generation failed')
-            await emit('error', message=format_error_message(exc, provider))
+            status = 'stopped'
+
         finally:
             try:
                 with connect() as db:

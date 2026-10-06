@@ -65,7 +65,7 @@ export function App() {
 
   // Multi-provider state
   const [provider, setProvider] = useState<string>(
-    () => safeStorage.getItem("forma-provider") || "groq",
+    () => safeStorage.getItem("forma-provider") || "auto",
   );
   const [providers, setProviders] = useState<ProviderInfo[]>(defaultProviders);
 
@@ -74,7 +74,7 @@ export function App() {
   const [model, setModel] = useState<string>(
     safeStorage.getItem(`forma-model-${provider}`) ||
       safeStorage.getItem("forma-model") ||
-      "",
+      "auto",
   );
 
   const [theme, setTheme] = useState(
@@ -118,6 +118,7 @@ export function App() {
   const searchVersion = useRef(0);
 
   const isAuto = provider === "auto" || model === "auto" || !model || model === "";
+  const currentDetail = modelDetails.find((d) => d.id === model);
   const currentProviderInfo = providers.find((p) => p.id === provider);
   const ready = Boolean(
     connected &&
@@ -228,6 +229,15 @@ export function App() {
         setError((e as Error).message || "Failed to initialize conversation for upload.");
         return;
       }
+    }
+
+    const hasImage = fileArray.some(
+      (f) => f.type.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(f.name),
+    );
+    if (hasImage && !isAuto && (!currentDetail || !currentDetail.supports_vision)) {
+      handleSelectModel("auto", "auto");
+      setStatus("Auto-switched to Vision model for image analysis");
+      setTimeout(() => setStatus(""), 3500);
     }
 
     for (const file of fileArray) {
@@ -527,6 +537,17 @@ export function App() {
                 m.id === assistantId ? { ...m, sources: event.sources } : m,
               ),
             );
+          }
+          if (event.type === "shift") {
+            const routedModel = `${event.provider}:${event.model}`;
+            setMessages((old) =>
+              old.map((m) =>
+                m.id === assistantId
+                  ? { ...m, model: routedModel, auto_reason: event.auto_reason }
+                  : m,
+              ),
+            );
+            setStatus(event.auto_reason || `Shifted to ${event.model}…`);
           }
           if (event.type === "status") setStatus(event.message);
           if (event.type === "token") {
