@@ -162,3 +162,13 @@ For complete hosting guides on **Render** or **Railway** with persistent volumes
 ## 📄 License
 
 This project is licensed under the [MIT License](LICENSE).
+
+### Task-specific model choices
+
+The model menu's **Choose by task** filter shows up to three currently eligible models for chat/writing, coding, reasoning, documents, web-supported answers, or image understanding. The backend returns these lists in `/api/models` as `feature_coverage`. Auto uses the same shortlist, with at most two backups before any response text is emitted. Manual selections never fail over automatically.
+
+Shortlists prefer different providers where possible. A feature with only one option is marked limited; no verified options means unavailable. A successful model-list request is not a guarantee of inference quota or future uptime. Provider errors are still handled at generation time.
+
+Ollama capabilities come from `/api/tags` or `/api/show`. OpenRouter input/output modalities and reasoning parameters come from its live model metadata. Cloud models without detailed capability discovery use the curated backend catalog intersected with the provider's current model list. See [Ollama model details](https://docs.ollama.com/api-reference/show-model-details) and [OpenRouter model metadata](https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties).
+
+Documents use this app's text extraction, and web answers use this app's search pipeline. These are not claims of native PDF or web-browsing support. Image generation is marked unsupported until an image-output provider adapter and UI are implemented; vision models are not presented as image generators.

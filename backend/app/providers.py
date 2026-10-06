@@ -36,14 +36,14 @@ PROVIDERS: dict[str, dict[str, Any]] = {
                 "name": "GPT-OSS 20B",
                 "provider": "groq",
                 "badge": "⚡ Ultra Fast (500+ tok/s)",
-                "description": "Blazing fast 20B model for instant answers, summary, and code generation.",
+                "description": "A compact reasoning model for everyday answers, summaries, and coding.",
                 "supports_vision": False,
-                "supports_reasoning": False,
+                "supports_reasoning": True,
                 "supports_search": True,
                 "is_fast": True,
                 "context_window": 131072,
                 "max_output_tokens": 4096,
-                "capabilities": ["Fast", "General Chat"],
+                "capabilities": ["Fast", "General Chat", "Reasoning"],
             },
             {
                 "id": "qwen/qwen3.8-27b",
@@ -244,6 +244,11 @@ def get_model_metadata(provider: str, model: str) -> dict[str, Any]:
     """Retrieve verified capabilities and limits for a specific provider and model."""
     p_lower = (provider or "").lower().strip()
     m_lower = (model or "").lower().strip()
+    cached = _HEALTH_CACHE.get(p_lower)
+    if cached:
+        for detail in cached[1].get('model_details', []):
+            if detail.get('id', '').lower() == m_lower:
+                return dict(detail)
     pconfig = PROVIDERS.get(p_lower)
     if pconfig:
         for m in pconfig.get("models", []):
@@ -326,12 +331,12 @@ def choose_auto_model(
         if provider == "ollama":
             details = state.get("model_details") or []
         else:
-            details = PROVIDERS[provider].get("models", [])
+            details = state.get("model_details", PROVIDERS[provider].get("models", []))
         for model in details:
             mid = model.get("id")
             if not mid or mid not in reported:
                 continue
-            if provider == "ollama" and not model.get("chat_compatible"):
+            if model.get("chat_compatible") is False or (provider == "ollama" and not model.get("chat_compatible")):
                 continue
             if model.get("supports_image_generation"):
                 continue  # Text chat does not implement image output.
@@ -341,6 +346,10 @@ def choose_auto_model(
             reasoning = bool(model.get("supports_reasoning"))
             fast = bool(model.get("is_fast"))
             coding = "code" in tags or model.get("specialty") == "code"
+            if task == "complex reasoning" and not reasoning:
+                continue
+            if task == "coding" and not (coding or reasoning):
+                continue
             context = int(model.get("context_window") or 0)
             score = 0
             if task == "image understanding":
@@ -354,7 +363,7 @@ def choose_auto_model(
             elif task == "complex reasoning":
                 score = 30 + (30 if reasoning else 0) + (10 if coding else 0)
             else:
-                score = 30 + (25 if fast else 0) - (15 if reasoning else 0) - (5 if coding or model.get("supports_vision") else 0)
+                score = 30 + (25 if fast else 0) - (15 if reasoning else 0) - (5 if coding or model.get("supports_vision") else 0) + (5 if "general chat" in tags else 0)
             # Stable ordering keeps choices predictable when scores tie.
             ranked.append((score, provider, mid, model.get("name") or mid))
     if not ranked:
@@ -363,6 +372,56 @@ def choose_auto_model(
     ranked.sort(key=lambda item: (-item[0], item[1], item[2]))
     _, provider, mid, name = ranked[0]
     return provider, mid, f"Auto chose {name} ({PROVIDERS[provider]['name']}) for {task}."
+
+
+TASKS = {
+    'chat': ('Everyday chat & writing', {}),
+    'coding': ('Coding & debugging', {'content': 'Write code'}),
+    'reasoning': ('Math & reasoning', {'content': 'Prove a theorem'}),
+    'documents': ('Documents & summaries', {'has_documents': True}),
+    'web': ('Web-supported answers', {'is_web_search': True}),
+    'vision': ('Image understanding', {'has_images': True}),
+}
+
+
+def recommend_models(health, *, limit=3, **task):
+    """Return a bounded shortlist from the same candidates Auto actually uses."""
+    remaining = {p: dict(state, models=list(state.get('models', []))) for p, state in health.items()}
+    options = []
+    args = dict(has_images=False, has_documents=False, is_web_search=False, content='')
+    args.update(task)
+    for _ in range(limit):
+        try:
+            unused_providers = {p: state for p, state in remaining.items()
+                                if p not in {option['provider'] for option in options}}
+            try:
+                provider, model, reason = choose_auto_model(unused_providers, **args)
+            except ValueError:
+                provider, model, reason = choose_auto_model(remaining, **args)
+        except ValueError:
+            break
+        options.append({'provider': provider, 'model': model, 'reason': reason})
+        remaining[provider]['models'].remove(model)
+    return options
+
+
+def feature_coverage(health):
+    coverage = {}
+    for key, (label, task) in TASKS.items():
+        options = recommend_models(health, **task)
+        count = len(options)
+        coverage[key] = {
+            'label': label, 'options': options,
+            'status': 'ready' if count >= 2 else 'limited' if count else 'unavailable',
+            'message': f'{count} currently listed options. Availability is checked again when you send.' if count >= 2
+                       else 'Only one verified option is available; there is no verified backup.' if count
+                       else 'No verified option is available from your connected providers.',
+        }
+    coverage['image_generation'] = {
+        'label': 'Image generation', 'options': [], 'status': 'unsupported',
+        'message': 'This chat currently supports image understanding, not image output. An image-generation integration is required.',
+    }
+    return coverage
 
 
 def routing_health(healthy_providers):
@@ -378,19 +437,11 @@ def select_auto_model(has_images, has_documents, is_web_search, content, healthy
 
 def get_fallback_candidates(current_provider, current_model, has_images=False, healthy_providers=None,
                             has_documents=False, is_web_search=False, content=""):
-    health = {p: dict(state) for p, state in routing_health(healthy_providers).items()}
-    if current_provider in health:
-        health[current_provider]['models'] = [m for m in health[current_provider].get('models', []) if m != current_model]
-    result = []
-    for _ in range(3):
-        try:
-            p, m, reason = choose_auto_model(health, has_images=has_images, has_documents=has_documents,
-                                             is_web_search=is_web_search, content=content)
-        except ValueError:
-            break
-        result.append((p, m, reason))
-        health[p]['models'] = [mid for mid in health[p]['models'] if mid != m]
-    return result
+    options = recommend_models(routing_health(healthy_providers), limit=3,
+                               has_images=has_images, has_documents=has_documents,
+                               is_web_search=is_web_search, content=content)
+    return [(option['provider'], option['model'], option['reason']) for option in options
+            if (option['provider'], option['model']) != (current_provider, current_model)][:2]
 
 
 def get_api_key(provider_name: str) -> str | None:
@@ -583,8 +634,26 @@ async def probe_provider_health(provider_name: str, force: bool = False) -> dict
                 if p_lower == "openrouter":
                     response = await c.get("https://openrouter.ai/api/v1/models", headers=headers)
                     response.raise_for_status()
-                reported = {m.get('id') for m in response.json().get('data', []) if isinstance(m, dict)}
+                listed = {m.get('id'): m for m in response.json().get('data', []) if isinstance(m, dict)}
+                reported = set(listed)
                 available = [mid for mid in curated_ids if mid in reported]
+                details = [dict(m) for m in config.get('models', []) if m['id'] in available]
+                if p_lower == 'openrouter':
+                    for detail in details:
+                        live = listed[detail['id']]
+                        architecture = live.get('architecture') or {}
+                        inputs = architecture.get('input_modalities') or []
+                        outputs = architecture.get('output_modalities') or []
+                        detail['supports_vision'] = 'image' in inputs
+                        detail['supports_image_generation'] = 'image' in outputs
+                        detail['chat_compatible'] = 'text' in inputs and 'text' in outputs
+                        detail['supports_reasoning'] = bool({'reasoning', 'include_reasoning'} & set(live.get('supported_parameters') or []))
+                        detail['context_window'] = live.get('context_length') or detail.get('context_window', 0)
+                        detail['capabilities'] = [tag for tag in detail.get('capabilities', []) if tag not in ('Vision', 'Reasoning', 'Deep Reasoning')]
+                        if detail['supports_vision']:
+                            detail['capabilities'].append('Vision')
+                        if detail['supports_reasoning']:
+                            detail['capabilities'].append('Reasoning')
                 res = {
                     "id": p_lower,
                     "configured": True,
@@ -592,6 +661,7 @@ async def probe_provider_health(provider_name: str, force: bool = False) -> dict
                     "status": "ready" if available else "no_models",
                     "error": None if available else "No supported models are currently available.",
                     "models": available,
+                    "model_details": details,
                 }
             elif status_code == 401:
                 res = {

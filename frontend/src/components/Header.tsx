@@ -16,9 +16,10 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { ModelDetail, ProviderInfo } from "../types";
+import { ModelDetail, ProviderInfo, FeatureCoverage } from "../types";
 
 interface HeaderProps {
+  featureCoverage?: FeatureCoverage;
   sidebar: boolean;
   onOpenSidebar: () => void;
   messagesCount: number;
@@ -41,6 +42,7 @@ interface HeaderProps {
 }
 
 export function Header({
+  featureCoverage = {},
   sidebar,
   onOpenSidebar,
   messagesCount,
@@ -61,6 +63,7 @@ export function Header({
   onToggleTheme,
   onExportChat,
 }: HeaderProps) {
+  const [taskFilter, setTaskFilter] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | "vision" | "reasoning" | "fast" | "local">("all");
@@ -120,6 +123,8 @@ export function Header({
         : (provider === p.id ? modelDetails : []);
 
       const matchingModels = pModels.filter((m) => {
+        if (taskFilter && !featureCoverage[taskFilter]?.options.some(
+          (option) => option.provider === p.id && option.model === m.id)) return false;
         // Capability filter
         if (activeFilter === "vision" && !m.supports_vision) return false;
         if (activeFilter === "reasoning" && !m.supports_reasoning) return false;
@@ -141,7 +146,7 @@ export function Header({
         filteredModels: matchingModels,
       };
     });
-  }, [providers, provider, modelDetails, searchQuery, activeFilter]);
+  }, [providers, provider, modelDetails, searchQuery, activeFilter, taskFilter, featureCoverage]);
 
   const totalFilteredModels = useMemo(() => {
     return filteredProviders.reduce((acc, p) => acc + p.filteredModels.length, 0);
@@ -222,6 +227,20 @@ export function Header({
                 )}
               </div>
 
+              {Object.keys(featureCoverage).length > 0 && (
+                <div className="task-model-filter">
+                  <label htmlFor="model-task">Choose by task</label>
+                  <select id="model-task" value={taskFilter} onChange={(e) => {
+                    setTaskFilter(e.target.value); setActiveFilter("all"); setSearchQuery("");
+                  }}>
+                    <option value="">All models</option>
+                    {Object.entries(featureCoverage).map(([key, feature]) => (
+                      <option key={key} value={key}>{feature.label} ({feature.options.length})</option>
+                    ))}
+                  </select>
+                  {taskFilter && <p role="status">{featureCoverage[taskFilter]?.message}</p>}
+                </div>
+              )}
               {/* Capability Filter Chips */}
               <div className="menu-filter-chips">
                 {(["all", "vision", "reasoning", "fast", "local"] as const).map((filterKey) => (
@@ -241,7 +260,7 @@ export function Header({
               </div>
 
               {/* Option: Auto Smart Routing (shown when no specific search query or matching 'auto') */}
-              {(!searchQuery || "auto smart routing".includes(searchQuery.toLowerCase())) && activeFilter === "all" && (
+              {(!searchQuery || "auto smart routing".includes(searchQuery.toLowerCase())) && activeFilter === "all" && !taskFilter && (
                 <>
                   <div
                     className={`unified-menu-item auto-item ${isAuto ? "active" : ""}`}

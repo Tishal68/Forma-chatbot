@@ -44,7 +44,15 @@ export interface ProviderInfo {
   models?: ModelDetail[];
 }
 
+export type FeatureCoverage = Record<string, {
+  label: string;
+  status: string;
+  message: string;
+  options: {provider: string; model: string; reason: string}[];
+}>;
+
 export interface ModelsResponse {
+  feature_coverage?: FeatureCoverage;
   provider: string;
   providers: ProviderInfo[];
   models: string[];

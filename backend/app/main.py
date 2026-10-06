@@ -22,6 +22,7 @@ from .database import connect, initialize
 from .extractors import check_vision_support, extract_file_content, sanitize_filename, validate_file_type
 from .providers import (
     PROVIDERS,
+    feature_coverage,
     get_api_key,
     get_ollama_model_detail,
     get_provider_config,
@@ -386,7 +387,7 @@ async def list_models(provider: str | None = None, refresh: bool = False):
             for m in raw_models:
                 p_models.append(next((d for d in h.get('model_details', []) if d['id'] == m), get_ollama_model_detail(m)))
         else:
-            p_models = [dict(m) for m in pdata.get("models", []) if m["id"] in h.get("models", [])]
+            p_models = [dict(m) for m in h.get("model_details", pdata.get("models", [])) if m["id"] in h.get("models", [])]
 
         providers_summary.append({
             "id": pid,
@@ -419,12 +420,13 @@ async def list_models(provider: str | None = None, refresh: bool = False):
         details = [next((d for d in phealth.get('model_details', []) if d['id'] == m), get_ollama_model_detail(m)) for m in models]
         default_m = settings.OLLAMA_MODEL if settings.OLLAMA_MODEL in models else (models[0] if models else settings.OLLAMA_MODEL)
     else:
-        curated = [m for m in pconfig.get("models", []) if m["id"] in phealth.get("models", [])]
+        curated = [m for m in phealth.get("model_details", pconfig.get("models", [])) if m["id"] in phealth.get("models", [])]
         models = [m["id"] for m in curated]
         details = curated
         default_m = pconfig["default_model"]
 
     return {
+        "feature_coverage": feature_coverage(health_by_pid),
         "provider": active_p,
         "providers": providers_summary,
         "models": models,

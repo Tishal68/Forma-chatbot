@@ -161,3 +161,54 @@ def test_regenerate_restores_document_attachment(client, monkeypatch, tmp_path):
     client.post('/api/chat', json={'conversation_id': cid, 'regenerate': True})
     assert 'Project uses cedar wood.' in calls[-1]['messages'][-1]['content']
     assert 'Summarize' in calls[-1]['messages'][-1]['content']
+
+@pytest.mark.parametrize('feature', ['chat', 'coding', 'reasoning', 'documents', 'web', 'vision'])
+def test_feature_shortlists_offer_three_real_options(feature):
+    details = [model_detail(f'custom-{i}', {'capabilities': ['completion', 'vision', 'thinking']}, local=True) for i in range(5)]
+    health = {'ollama': {'working': True, 'models': [d['id'] for d in details], 'model_details': details}}
+    coverage = providers.feature_coverage(health)
+    assert coverage[feature]['status'] == 'ready'
+    assert len(coverage[feature]['options']) == 3
+    assert len({o['model'] for o in coverage[feature]['options']}) == 3
+    assert not coverage['image_generation']['options']
+    assert coverage['image_generation']['status'] == 'unsupported'
+
+
+def test_feature_shortlist_reports_shortage_instead_of_inventing_models():
+    detail = model_detail('text-only', {'capabilities': ['completion']}, local=True)
+    health = {'ollama': {'working': True, 'models': ['text-only'], 'model_details': [detail]}}
+    coverage = providers.feature_coverage(health)
+    assert coverage['chat']['status'] == 'limited'
+    assert len(coverage['chat']['options']) == 1
+    assert coverage['vision']['status'] == 'unavailable'
+    assert coverage['reasoning']['status'] == 'unavailable'
+    health['ollama']['working'] = False
+    assert providers.feature_coverage(health)['chat']['options'] == []
+
+
+def test_shortlist_prefers_independent_providers():
+    details = [model_detail(f'custom-{i}', {'capabilities': ['completion']}, local=True) for i in range(3)]
+    health = {'ollama': {'working': True, 'models': [d['id'] for d in details], 'model_details': details},
+              'groq': {'working': True, 'models': ['openai/gpt-oss-20b']}}
+    options = providers.recommend_models(health)
+    assert len(options) == 3
+    assert options[0]['provider'] != options[1]['provider']
+
+
+def test_openrouter_capabilities_use_live_metadata(monkeypatch):
+    monkeypatch.setenv('OPENROUTER_API_KEY', 'test-only')
+    monkeypatch.setattr(providers, '_HEALTH_CACHE', {})
+    def handler(request):
+        if request.url.path.endswith('/auth/key'):
+            return httpx.Response(200, json={'data': {'limit_remaining': 10}})
+        return httpx.Response(200, json={'data': [{
+            'id': 'openai/gpt-4o', 'architecture': {'input_modalities': ['text'], 'output_modalities': ['text']},
+            'supported_parameters': [], 'context_length': 8192}]})
+    client_type = httpx.AsyncClient
+    monkeypatch.setattr(providers.httpx, 'AsyncClient', lambda **kwargs: client_type(transport=httpx.MockTransport(handler), **kwargs))
+    state = asyncio.run(providers.probe_provider_health('openrouter'))
+    detail = state['model_details'][0]
+    assert detail['supports_vision'] is False  # Overrides the older curated claim.
+    assert detail['supports_reasoning'] is False
+    assert detail['context_window'] == 8192
+    assert providers.feature_coverage({'openrouter': state})['vision']['options'] == []

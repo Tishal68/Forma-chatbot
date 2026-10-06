@@ -143,6 +143,7 @@ export function App() {
     }
   }, [search]);
 
+  const [featureCoverage, setFeatureCoverage] = useState<import("./types").FeatureCoverage>({});
   const modelRequestVersion = useRef(0);
   const loadModels = useCallback(
     async (targetProvider?: string, forceRefresh = false, explicitModel?: string) => {
@@ -164,6 +165,7 @@ export function App() {
         if (targetProvider !== "auto") {
           setProvider(activeProvider);
         }
+        setFeatureCoverage(data.feature_coverage || {});
         setModels(data.models || []);
         setModelDetails(data.model_details || []);
         setConnected(true);
@@ -683,6 +685,7 @@ export function App() {
           model={model}
           models={models}
           modelDetails={modelDetails}
+          featureCoverage={featureCoverage}
           busy={busy}
           onModelChange={setModel}
           onSelectModel={handleSelectModel}
