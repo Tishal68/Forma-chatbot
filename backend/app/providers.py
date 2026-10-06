@@ -80,8 +80,50 @@ PROVIDERS: dict[str, dict[str, Any]] = {
         "base_url": "https://openrouter.ai/api/v1",
         "api_key_env": "OPENROUTER_API_KEY",
         "key_url": "https://openrouter.ai/keys",
-        "default_model": "meta-llama/llama-3.3-70b-instruct",
+        "default_model": "openai/gpt-4o-mini",
         "models": [
+            {
+                "id": "openai/gpt-4o-mini",
+                "name": "GPT-4o Mini",
+                "provider": "openrouter",
+                "badge": "👁️ Vision & Fast",
+                "description": "Fast multimodal intelligence with verified image understanding, coding, and chat.",
+                "supports_vision": True,
+                "supports_reasoning": False,
+                "supports_search": True,
+                "is_fast": True,
+                "context_window": 128000,
+                "max_output_tokens": 4096,
+                "capabilities": ["Vision", "Fast", "Code"],
+            },
+            {
+                "id": "openai/gpt-4o",
+                "name": "GPT-4o",
+                "provider": "openrouter",
+                "badge": "🧠 Flagship Multimodal",
+                "description": "OpenAI flagship omni model for complex visual analysis, logic, and coding.",
+                "supports_vision": True,
+                "supports_reasoning": True,
+                "supports_search": True,
+                "is_fast": False,
+                "context_window": 128000,
+                "max_output_tokens": 4096,
+                "capabilities": ["Vision", "Reasoning", "Multimodal"],
+            },
+            {
+                "id": "deepseek/deepseek-r1",
+                "name": "DeepSeek R1",
+                "provider": "openrouter",
+                "badge": "🧠 Reasoning Leader",
+                "description": "Frontier open reasoning benchmark leader with deep step-by-step thinking.",
+                "supports_vision": False,
+                "supports_reasoning": True,
+                "supports_search": False,
+                "is_fast": False,
+                "context_window": 64000,
+                "max_output_tokens": 8192,
+                "capabilities": ["Deep Reasoning", "Math"],
+            },
             {
                 "id": "meta-llama/llama-3.3-70b-instruct",
                 "name": "Llama 3.3 70B Instruct",
@@ -97,46 +139,18 @@ PROVIDERS: dict[str, dict[str, Any]] = {
                 "capabilities": ["General", "Code", "Search"],
             },
             {
-                "id": "anthropic/claude-3.5-sonnet",
-                "name": "Claude 3.5 Sonnet",
+                "id": "qwen/qwen-2.5-72b-instruct",
+                "name": "Qwen 2.5 72B Instruct",
                 "provider": "openrouter",
-                "badge": "👑 Coding & Vision",
-                "description": "Anthropic's frontier model for complex coding, deep analysis, and image understanding.",
-                "supports_vision": True,
-                "supports_reasoning": True,
-                "supports_search": True,
-                "is_fast": False,
-                "context_window": 200000,
-                "max_output_tokens": 8192,
-                "capabilities": ["Vision", "Reasoning", "Code"],
-            },
-            {
-                "id": "deepseek/deepseek-r1",
-                "name": "DeepSeek R1",
-                "provider": "openrouter",
-                "badge": "🧠 Reasoning Leader",
-                "description": "Frontier open reasoning benchmark leader with chain-of-thought.",
+                "badge": "💻 Elite Coding",
+                "description": "High-capability open model specialized in code generation, math, and technical tasks.",
                 "supports_vision": False,
                 "supports_reasoning": True,
-                "supports_search": False,
-                "is_fast": False,
-                "context_window": 64000,
-                "max_output_tokens": 8192,
-                "capabilities": ["Deep Reasoning", "Math"],
-            },
-            {
-                "id": "openai/gpt-4o",
-                "name": "GPT-4o (OpenRouter)",
-                "provider": "openrouter",
-                "badge": "🧠 Omni Intelligence",
-                "description": "OpenAI flagship multimodal intelligence with image analysis via OpenRouter.",
-                "supports_vision": True,
-                "supports_reasoning": True,
                 "supports_search": True,
                 "is_fast": False,
-                "context_window": 128000,
+                "context_window": 131072,
                 "max_output_tokens": 4096,
-                "capabilities": ["Vision", "Reasoning", "Multimodal"],
+                "capabilities": ["Code", "Math", "Logic"],
             },
         ],
     },
@@ -200,14 +214,14 @@ PROVIDERS: dict[str, dict[str, Any]] = {
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
         "api_key_env": "GEMINI_API_KEY",
         "key_url": "https://aistudio.google.com/app/apikey",
-        "default_model": "gemini-2.5-flash",
+        "default_model": "gemini-flash-lite-latest",
         "models": [
             {
-                "id": "gemini-2.5-flash",
-                "name": "Gemini 2.5 Flash",
+                "id": "gemini-flash-lite-latest",
+                "name": "Gemini Flash Lite",
                 "provider": "gemini",
-                "badge": "⚡ Blazing Fast Multimodal",
-                "description": "Google's ultra-fast multimodal model with 1M token context, reasoning, and image analysis.",
+                "badge": "⚡ Fast Multimodal Vision",
+                "description": "Google's ultra-fast, responsive multimodal model with image analysis and 1M context.",
                 "supports_vision": True,
                 "supports_reasoning": False,
                 "supports_search": True,
@@ -217,39 +231,11 @@ PROVIDERS: dict[str, dict[str, Any]] = {
                 "capabilities": ["Vision", "Fast", "1M Context"],
             },
             {
-                "id": "gemini-2.5-pro",
-                "name": "Gemini 2.5 Pro",
-                "provider": "gemini",
-                "badge": "🧠 Deep Analysis & Vision",
-                "description": "2M token context window with advanced multimodal image understanding and reasoning.",
-                "supports_vision": True,
-                "supports_reasoning": True,
-                "supports_search": True,
-                "is_fast": False,
-                "context_window": 2097152,
-                "max_output_tokens": 8192,
-                "capabilities": ["Vision", "Reasoning", "2M Context"],
-            },
-            {
-                "id": "gemini-3.8-flash",
-                "name": "Gemini 3.8 Flash",
-                "provider": "gemini",
-                "badge": "⚡ Next-Gen Flash",
-                "description": "Next-generation Gemini model built for low latency, image analysis, and high accuracy.",
-                "supports_vision": True,
-                "supports_reasoning": False,
-                "supports_search": True,
-                "is_fast": True,
-                "context_window": 1048576,
-                "max_output_tokens": 8192,
-                "capabilities": ["Vision", "Fast", "Multimodal"],
-            },
-            {
                 "id": "gemini-flash-latest",
                 "name": "Gemini Flash (Latest)",
                 "provider": "gemini",
                 "badge": "⚡ Stable Latest",
-                "description": "Latest stable production release of Gemini Flash with image analysis.",
+                "description": "Production release of Gemini Flash with multimodal image understanding.",
                 "supports_vision": True,
                 "supports_reasoning": False,
                 "supports_search": True,
@@ -257,6 +243,20 @@ PROVIDERS: dict[str, dict[str, Any]] = {
                 "context_window": 1048576,
                 "max_output_tokens": 8192,
                 "capabilities": ["Vision", "Fast"],
+            },
+            {
+                "id": "gemini-3.8-flash",
+                "name": "Gemini 3.8 Flash",
+                "provider": "gemini",
+                "badge": "🧠 Frontier Vision",
+                "description": "Next-generation Gemini model built for multimodal analysis and deep understanding.",
+                "supports_vision": True,
+                "supports_reasoning": False,
+                "supports_search": True,
+                "is_fast": True,
+                "context_window": 1048576,
+                "max_output_tokens": 8192,
+                "capabilities": ["Vision", "Multimodal", "Reasoning"],
             },
         ],
     },
@@ -645,32 +645,32 @@ def select_auto_model(
 
     # 1. Image Attachment Routing — only verified vision-capable models
     if has_images:
+        if has_p("openrouter"):
+            return "openrouter", "openai/gpt-4o-mini", "Auto: GPT-4o Mini (OpenRouter) selected for fast, verified multimodal image analysis."
         if has_p("gemini"):
-            return "gemini", "gemini-2.5-flash", "Auto: Gemini 2.5 Flash selected for high-speed multimodal image understanding."
+            return "gemini", "gemini-flash-lite-latest", "Auto: Gemini Flash Lite selected for high-speed multimodal image understanding."
         if has_p("openai"):
             return "openai", "gpt-4o-mini", "Auto: GPT-4o Mini selected for fast image analysis."
-        if has_p("openrouter"):
-            return "openrouter", "anthropic/claude-3.5-sonnet", "Auto: Claude 3.5 Sonnet selected for precision visual inspection."
         if has_p("ollama"):
             vis_model = ollama_model_with(lambda d: d.get("supports_vision"))
             if vis_model:
                 return "ollama", vis_model, f"Auto: {vis_model} selected for local image analysis."
             raise ValueError(
                 "No vision-capable Ollama model is installed. "
-                "Install a vision model (e.g. `ollama pull llama3.2-vision` or `ollama pull llava`), or configure Gemini or OpenAI."
+                "Install a vision model (e.g. `ollama pull llama3.2-vision` or `ollama pull llava`), or configure OpenRouter or Gemini."
             )
         raise ValueError("No vision-capable AI provider is configured on this server to analyze images.")
 
     # 2. PDF / DOCX / CSV / Code Document Routing
     if has_documents:
-        if has_p("gemini"):
-            return "gemini", "gemini-2.5-flash", "Auto: Gemini 2.5 Flash selected for large-context document comprehension (1M tokens)."
         if has_p("groq"):
-            return "groq", "openai/gpt-oss-120b", "Auto: GPT-OSS 120B selected for high-speed document synthesis."
+            return "groq", "openai/gpt-oss-120b", "Auto: GPT-OSS 120B (Groq) selected for high-speed document synthesis."
+        if has_p("openrouter"):
+            return "openrouter", "meta-llama/llama-3.3-70b-instruct", "Auto: Llama 3.3 70B (OpenRouter) selected for comprehensive document analysis."
+        if has_p("gemini"):
+            return "gemini", "gemini-flash-lite-latest", "Auto: Gemini Flash Lite selected for large-context document comprehension (1M tokens)."
         if has_p("openai"):
             return "openai", "gpt-4o-mini", "Auto: GPT-4o Mini selected for structured document extraction."
-        if has_p("openrouter"):
-            return "openrouter", "meta-llama/llama-3.3-70b-instruct", "Auto: Llama 3.3 70B selected for document analysis."
         if has_p("ollama"):
             m = ollama_best_text()
             if m:
@@ -679,38 +679,55 @@ def select_auto_model(
     # 3. Web Search Routing
     if is_web_search:
         if has_p("groq"):
-            return "groq", "openai/gpt-oss-120b", "Auto: GPT-OSS 120B selected for fast citation-grounded web search answering."
+            return "groq", "openai/gpt-oss-120b", "Auto: GPT-OSS 120B (Groq) selected for fast citation-grounded web search answering."
+        if has_p("openrouter"):
+            return "openrouter", "meta-llama/llama-3.3-70b-instruct", "Auto: Llama 3.3 70B (OpenRouter) selected for web search grounding."
         if has_p("gemini"):
-            return "gemini", "gemini-2.5-flash", "Auto: Gemini 2.5 Flash selected for web search analysis."
+            return "gemini", "gemini-flash-lite-latest", "Auto: Gemini Flash Lite selected for web search analysis."
         if has_p("openai"):
             return "openai", "gpt-4o-mini", "Auto: GPT-4o Mini selected for web search grounding."
-        if has_p("openrouter"):
-            return "openrouter", "meta-llama/llama-3.3-70b-instruct", "Auto: Llama 3.3 70B selected for web search grounding."
         if has_p("ollama"):
             m = ollama_best_text()
             if m:
                 return "ollama", m, f"Auto: {m} selected for local web search."
 
-    # 4. Complex Coding / Deep Reasoning Detection
+    # 4. Complex Coding / Software Engineering
     text_lower = (content or "").lower()
+    has_code_block = "```" in content or "def " in content or "function " in content or "class " in content
+    is_coding_prompt = has_code_block or any(kw in text_lower for kw in ("python", "javascript", "typescript", "code", "bug", "refactor", "function", "class", "async", "api", "sql", "regex", "git", "docker"))
+
+    if is_coding_prompt:
+        if has_p("groq"):
+            return "groq", "openai/gpt-oss-120b", "Auto: GPT-OSS 120B (Groq) selected for high-speed coding and debugging."
+        if has_p("openrouter"):
+            return "openrouter", "qwen/qwen-2.5-72b-instruct", "Auto: Qwen 2.5 72B (OpenRouter) selected for elite code generation and logic."
+        if has_p("openrouter"):
+            return "openrouter", "meta-llama/llama-3.3-70b-instruct", "Auto: Llama 3.3 70B (OpenRouter) selected for software architecture and code."
+        if has_p("ollama"):
+            m = ollama_best_text()
+            if m:
+                return "ollama", m, f"Auto: {m} selected for local code generation."
+
+    # 5. Deep STEM / Math / Logic Reasoning
     reasoning_keywords = (
         "prove", "step by step", "algorithm", "derivation", "derive",
         "calculate", "theorem", "math", "complexity", "time complexity",
         "refactor", "debug", "traceback", "stack trace", "memory leak",
         "deadlock", "race condition", "regex", "sql query", "architecture"
     )
-    has_code_block = "```" in content or "def " in content or "function " in content or "class " in content
     is_reasoning_prompt = has_code_block or any(kw in text_lower for kw in reasoning_keywords)
 
     if is_reasoning_prompt:
         if has_p("openrouter"):
-            return "openrouter", "deepseek/deepseek-r1", "Auto: DeepSeek R1 selected for deep step-by-step reasoning."
+            return "openrouter", "deepseek/deepseek-r1", "Auto: DeepSeek R1 (OpenRouter) selected for deep step-by-step reasoning."
         if has_p("groq"):
-            return "groq", "openai/gpt-oss-120b", "Auto: GPT-OSS 120B selected for complex logic and coding."
+            return "groq", "qwen/qwen3.8-27b", "Auto: Qwen 3.8 27B (Groq) selected for analytical math and logic reasoning."
+        if has_p("groq"):
+            return "groq", "openai/gpt-oss-120b", "Auto: GPT-OSS 120B (Groq) selected for complex logic and reasoning."
         if has_p("openai"):
             return "openai", "o3-mini", "Auto: o3-mini selected for deep STEM and logic reasoning."
         if has_p("gemini"):
-            return "gemini", "gemini-2.5-pro", "Auto: Gemini 2.5 Pro selected for deep analytical reasoning."
+            return "gemini", "gemini-flash-lite-latest", "Auto: Gemini Flash Lite selected for analytical reasoning."
         if has_p("ollama"):
             m = ollama_best_text(prefer_reasoning=True)
             if m:
@@ -718,15 +735,15 @@ def select_auto_model(
                 reason = f"Auto: {m} selected for local reasoning and coding." if det.get("supports_reasoning") else f"Auto: {m} selected for local execution."
                 return "ollama", m, reason
 
-    # 5. General Chat -> Fast & Economical
+    # 6. General Chat -> Fast & Economical
     if has_p("groq"):
-        return "groq", "openai/gpt-oss-20b", "Auto: GPT-OSS 20B selected for ultra-fast conversational response (500+ tok/s)."
+        return "groq", "openai/gpt-oss-20b", "Auto: GPT-OSS 20B (Groq) selected for ultra-fast conversational response (500+ tok/s)."
     if has_p("gemini"):
-        return "gemini", "gemini-2.5-flash", "Auto: Gemini 2.5 Flash selected for low latency and high accuracy."
+        return "gemini", "gemini-flash-lite-latest", "Auto: Gemini Flash Lite selected for low latency and high accuracy."
+    if has_p("openrouter"):
+        return "openrouter", "openai/gpt-4o-mini", "Auto: GPT-4o Mini (OpenRouter) selected for fast, intelligent conversation."
     if has_p("openai"):
         return "openai", "gpt-4o-mini", "Auto: GPT-4o Mini selected for fast and responsive chat."
-    if has_p("openrouter"):
-        return "openrouter", "meta-llama/llama-3.3-70b-instruct", "Auto: Llama 3.3 70B selected for general chat."
     if has_p("ollama"):
         m = ollama_best_text()
         if m:

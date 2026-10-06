@@ -23,9 +23,9 @@ const localWorkspace = ["localhost", "127.0.0.1", "[::1]"].includes(
 
 const defaultProviders: ProviderInfo[] = [
   { id: "groq", name: "Groq", tagline: "Lightning Fast", default_model: "openai/gpt-oss-120b" },
-  { id: "openrouter", name: "OpenRouter", tagline: "All Frontier Models", default_model: "meta-llama/llama-3.3-70b-instruct" },
+  { id: "openrouter", name: "OpenRouter", tagline: "All Frontier Models", default_model: "openai/gpt-4o-mini" },
+  { id: "gemini", name: "Google Gemini", tagline: "Next-Gen Multimodal", default_model: "gemini-flash-lite-latest" },
   { id: "openai", name: "OpenAI", tagline: "GPT-4o & Reasoning", default_model: "gpt-4o-mini" },
-  { id: "gemini", name: "Google Gemini", tagline: "Next-Gen Multimodal", default_model: "gemini-2.5-flash" },
   { id: "ollama", name: "Ollama", tagline: "Local Offline", default_model: "llama3.2" },
 ];
 

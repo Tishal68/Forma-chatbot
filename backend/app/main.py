@@ -1057,6 +1057,7 @@ async def stream_chat_response(body: ChatPayload, request: Request):
                             'messages': cloud_messages,
                             'stream': True,
                             'temperature': body.temperature,
+                            'max_tokens': min(settings.OUTPUT_TOKENS, 4096),
                         },
                     ) as response:
                         if response.status_code >= 400:
