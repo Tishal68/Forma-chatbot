@@ -154,59 +154,6 @@ PROVIDERS: dict[str, dict[str, Any]] = {
             },
         ],
     },
-    "openai": {
-        "id": "openai",
-        "name": "OpenAI",
-        "tagline": "GPT-4o & Reasoning",
-        "base_url": "https://api.openai.com/v1",
-        "api_key_env": "OPENAI_API_KEY",
-        "key_url": "https://platform.openai.com/api-keys",
-        "default_model": "gpt-4o-mini",
-        "models": [
-            {
-                "id": "gpt-4o-mini",
-                "name": "GPT-4o Mini",
-                "provider": "openai",
-                "badge": "⚡ Fast & Intelligent",
-                "description": "Affordable, fast, multimodal model for day-to-day coding, image analysis, and chat.",
-                "supports_vision": True,
-                "supports_reasoning": False,
-                "supports_search": True,
-                "is_fast": True,
-                "context_window": 128000,
-                "max_output_tokens": 4096,
-                "capabilities": ["Vision", "Fast", "Code"],
-            },
-            {
-                "id": "gpt-4o",
-                "name": "GPT-4o",
-                "provider": "openai",
-                "badge": "🧠 Flagship Multimodal",
-                "description": "OpenAI's flagship omni model for complex programming, analysis, and image input.",
-                "supports_vision": True,
-                "supports_reasoning": True,
-                "supports_search": True,
-                "is_fast": False,
-                "context_window": 128000,
-                "max_output_tokens": 4096,
-                "capabilities": ["Vision", "Reasoning", "Code"],
-            },
-            {
-                "id": "o3-mini",
-                "name": "o3-mini (Reasoning)",
-                "provider": "openai",
-                "badge": "🔬 STEM / Logic",
-                "description": "Specialized reasoning text model with deep step-by-step thinking.",
-                "supports_vision": False,
-                "supports_reasoning": True,
-                "supports_search": False,
-                "is_fast": False,
-                "context_window": 200000,
-                "max_output_tokens": 8192,
-                "capabilities": ["Reasoning", "STEM / Logic"],
-            },
-        ],
-    },
     "gemini": {
         "id": "gemini",
         "name": "Google Gemini",
@@ -231,27 +178,27 @@ PROVIDERS: dict[str, dict[str, Any]] = {
                 "capabilities": ["Vision", "Fast", "1M Context"],
             },
             {
-                "id": "gemini-flash-latest",
-                "name": "Gemini Flash (Latest)",
+                "id": "gemini-3.5-flash-lite",
+                "name": "Gemini 3.5 Flash Lite",
                 "provider": "gemini",
-                "badge": "⚡ Stable Latest",
-                "description": "Production release of Gemini Flash with multimodal image understanding.",
+                "badge": "⚡ High Efficiency Vision",
+                "description": "High-efficiency multimodal model optimized for fast responses and image understanding.",
                 "supports_vision": True,
                 "supports_reasoning": False,
                 "supports_search": True,
                 "is_fast": True,
                 "context_window": 1048576,
                 "max_output_tokens": 8192,
-                "capabilities": ["Vision", "Fast"],
+                "capabilities": ["Vision", "Fast", "Multimodal"],
             },
             {
-                "id": "gemini-3.8-flash",
-                "name": "Gemini 3.8 Flash",
+                "id": "gemini-3.6-flash",
+                "name": "Gemini 3.6 Flash",
                 "provider": "gemini",
-                "badge": "🧠 Frontier Vision",
-                "description": "Next-generation Gemini model built for multimodal analysis and deep understanding.",
+                "badge": "🧠 Frontier Multimodal",
+                "description": "Advanced Gemini Flash model with multimodal vision reasoning and long context.",
                 "supports_vision": True,
-                "supports_reasoning": False,
+                "supports_reasoning": True,
                 "supports_search": True,
                 "is_fast": True,
                 "context_window": 1048576,
@@ -649,8 +596,6 @@ def select_auto_model(
             return "openrouter", "openai/gpt-4o-mini", "Auto: GPT-4o Mini (OpenRouter) selected for fast, verified multimodal image analysis."
         if has_p("gemini"):
             return "gemini", "gemini-flash-lite-latest", "Auto: Gemini Flash Lite selected for high-speed multimodal image understanding."
-        if has_p("openai"):
-            return "openai", "gpt-4o-mini", "Auto: GPT-4o Mini selected for fast image analysis."
         if has_p("ollama"):
             vis_model = ollama_model_with(lambda d: d.get("supports_vision"))
             if vis_model:
@@ -669,8 +614,6 @@ def select_auto_model(
             return "openrouter", "meta-llama/llama-3.3-70b-instruct", "Auto: Llama 3.3 70B (OpenRouter) selected for comprehensive document analysis."
         if has_p("gemini"):
             return "gemini", "gemini-flash-lite-latest", "Auto: Gemini Flash Lite selected for large-context document comprehension (1M tokens)."
-        if has_p("openai"):
-            return "openai", "gpt-4o-mini", "Auto: GPT-4o Mini selected for structured document extraction."
         if has_p("ollama"):
             m = ollama_best_text()
             if m:
@@ -684,8 +627,6 @@ def select_auto_model(
             return "openrouter", "meta-llama/llama-3.3-70b-instruct", "Auto: Llama 3.3 70B (OpenRouter) selected for web search grounding."
         if has_p("gemini"):
             return "gemini", "gemini-flash-lite-latest", "Auto: Gemini Flash Lite selected for web search analysis."
-        if has_p("openai"):
-            return "openai", "gpt-4o-mini", "Auto: GPT-4o Mini selected for web search grounding."
         if has_p("ollama"):
             m = ollama_best_text()
             if m:
@@ -724,10 +665,8 @@ def select_auto_model(
             return "groq", "qwen/qwen3.8-27b", "Auto: Qwen 3.8 27B (Groq) selected for analytical math and logic reasoning."
         if has_p("groq"):
             return "groq", "openai/gpt-oss-120b", "Auto: GPT-OSS 120B (Groq) selected for complex logic and reasoning."
-        if has_p("openai"):
-            return "openai", "o3-mini", "Auto: o3-mini selected for deep STEM and logic reasoning."
         if has_p("gemini"):
-            return "gemini", "gemini-flash-lite-latest", "Auto: Gemini Flash Lite selected for analytical reasoning."
+            return "gemini", "gemini-3.6-flash", "Auto: Gemini 3.6 Flash selected for analytical reasoning."
         if has_p("ollama"):
             m = ollama_best_text(prefer_reasoning=True)
             if m:
@@ -742,8 +681,6 @@ def select_auto_model(
         return "gemini", "gemini-flash-lite-latest", "Auto: Gemini Flash Lite selected for low latency and high accuracy."
     if has_p("openrouter"):
         return "openrouter", "openai/gpt-4o-mini", "Auto: GPT-4o Mini (OpenRouter) selected for fast, intelligent conversation."
-    if has_p("openai"):
-        return "openai", "gpt-4o-mini", "Auto: GPT-4o Mini selected for fast and responsive chat."
     if has_p("ollama"):
         m = ollama_best_text()
         if m:
@@ -896,8 +833,6 @@ async def probe_provider_health(provider_name: str, force: bool = False) -> dict
         probe_url = "https://generativelanguage.googleapis.com/v1beta/openai/models"
     elif p_lower == "groq":
         probe_url = "https://api.groq.com/openai/v1/models"
-    elif p_lower == "openai":
-        probe_url = "https://api.openai.com/v1/models"
     else:
         probe_url = f"{config['base_url']}/models"
 
@@ -907,6 +842,24 @@ async def probe_provider_health(provider_name: str, force: bool = False) -> dict
             response = await c.get(probe_url, headers=headers)
             status_code = response.status_code
             if status_code == 200:
+                if p_lower == "openrouter":
+                    try:
+                        kdata = response.json().get("data", {})
+                        limit_remaining = kdata.get("limit_remaining")
+                        free_remaining = kdata.get("free_model_daily_requests", {}).get("remaining", 0)
+                        if limit_remaining is not None and limit_remaining <= 0 and free_remaining <= 0:
+                            res = {
+                                "id": p_lower,
+                                "configured": True,
+                                "working": False,
+                                "status": "quota_exceeded",
+                                "error": "OpenRouter account balance and daily free credits are exhausted.",
+                                "models": curated_ids,
+                            }
+                            _HEALTH_CACHE[p_lower] = (now_ts, res)
+                            return res
+                    except Exception:
+                        pass
                 res = {
                     "id": p_lower,
                     "configured": True,

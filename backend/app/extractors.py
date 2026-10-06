@@ -37,7 +37,8 @@ KNOWN_OLLAMA_VISION_MODELS = {
 CLOUD_VISION_MODELS = {
     'gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'claude-3-5-sonnet',
     'claude-3-haiku', 'claude-3-opus',
-    'gemini-flash-lite-latest', 'gemini-flash-latest', 'gemini-3.8-flash',
+    'gemini-flash-lite-latest', 'gemini-3.5-flash-lite', 'gemini-3.6-flash',
+    'gemini-flash-latest', 'gemini-3.8-flash',
     'gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash',
     'openai/gpt-4o', 'openai/gpt-4o-mini',
     'llama-3.2-11b-vision-preview', 'llama-3.2-90b-vision-preview'
