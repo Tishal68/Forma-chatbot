@@ -596,12 +596,17 @@ def select_auto_model(
     5. General chat -> fast, economical text model.
     """
     # Determine available pool of providers
-    if healthy_providers:
+    if healthy_providers is not None:
         configured = [p.lower() for p in healthy_providers if is_provider_configured(p)]
     else:
         configured = [p for p in PROVIDERS if is_provider_configured(p)]
 
     if not configured:
+        if has_images:
+            raise ValueError(
+                "No vision-capable AI provider is configured on this server to analyze images. "
+                "Configure Gemini (GEMINI_API_KEY), OpenAI (OPENAI_API_KEY), or Ollama with a vision model."
+            )
         return "groq", "openai/gpt-oss-120b", "Default fallback (Groq GPT-OSS 120B)"
 
     def has_p(name: str) -> bool:

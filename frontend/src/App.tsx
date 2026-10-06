@@ -29,10 +29,34 @@ const defaultProviders: ProviderInfo[] = [
   { id: "ollama", name: "Ollama", tagline: "Local Offline", default_model: "llama3.2" },
 ];
 
+const safeStorage = {
+  getItem: (key: string): string | null => {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  setItem: (key: string, value: string): void => {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // Ignore quota or security errors in strict/private browsing modes
+    }
+  },
+  removeItem: (key: string): void => {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // Ignore
+    }
+  },
+};
+
 export function App() {
   const [chats, setChats] = useState<Conversation[]>([]);
   const [id, setId] = useState<string | null>(
-    localStorage.getItem("forma-active-chat"),
+    safeStorage.getItem("forma-active-chat"),
   );
   const [messages, setMessages] = useState<MessageType[]>([]);
   const [input, setInput] = useState("");
@@ -42,29 +66,29 @@ export function App() {
 
   // Multi-provider state
   const [provider, setProvider] = useState<string>(
-    () => localStorage.getItem("forma-provider") || "groq",
+    () => safeStorage.getItem("forma-provider") || "groq",
   );
   const [providers, setProviders] = useState<ProviderInfo[]>(defaultProviders);
 
   const [models, setModels] = useState<string[]>([]);
   const [modelDetails, setModelDetails] = useState<ModelDetail[]>([]);
   const [model, setModel] = useState<string>(
-    localStorage.getItem(`forma-model-${provider}`) ||
-      localStorage.getItem("forma-model") ||
+    safeStorage.getItem(`forma-model-${provider}`) ||
+      safeStorage.getItem("forma-model") ||
       "",
   );
 
   const [theme, setTheme] = useState(
-    localStorage.getItem("forma-theme") || "system",
+    safeStorage.getItem("forma-theme") || "system",
   );
   const [temperature, setTemperature] = useState(() => {
-    const saved = localStorage.getItem("forma-temperature");
+    const saved = safeStorage.getItem("forma-temperature");
     const num = saved ? Number(saved) : 0.7;
     return isNaN(num) ? 0.7 : Math.min(Math.max(num, 0), 2);
   });
   const [attachments, setAttachments] = useState<import("./types").Attachment[]>([]);
   const [webSearch, setWebSearch] = useState(() => {
-    return localStorage.getItem("forma-web-search") === "true";
+    return safeStorage.getItem("forma-web-search") === "true";
   });
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -104,7 +128,7 @@ export function App() {
   );
 
   useEffect(() => {
-    localStorage.setItem("forma-web-search", String(webSearch));
+    safeStorage.setItem("forma-web-search", String(webSearch));
   }, [webSearch]);
 
   const refresh = useCallback(async () => {
@@ -141,8 +165,8 @@ export function App() {
 
         if (explicitModel) {
           setModel(explicitModel);
-          localStorage.setItem(`forma-model-${activeProvider}`, explicitModel);
-          localStorage.setItem("forma-model", explicitModel);
+          safeStorage.setItem(`forma-model-${activeProvider}`, explicitModel);
+          safeStorage.setItem("forma-model", explicitModel);
           return;
         }
 
@@ -151,11 +175,11 @@ export function App() {
           if (old && old !== "auto" && data.models.includes(old)) {
             return old;
           }
-          const savedForProvider = localStorage.getItem(`forma-model-${activeProvider}`);
+          const savedForProvider = safeStorage.getItem(`forma-model-${activeProvider}`);
           if (savedForProvider && savedForProvider !== "auto" && data.models.includes(savedForProvider)) {
             return savedForProvider;
           }
-          const savedGeneral = localStorage.getItem("forma-model");
+          const savedGeneral = safeStorage.getItem("forma-model");
           if (savedGeneral && savedGeneral !== "auto" && data.models.includes(savedGeneral)) {
             return savedGeneral;
           }
@@ -173,20 +197,20 @@ export function App() {
   const handleSelectModel = (newProvider: string, newModel: string) => {
     setProvider(newProvider);
     setModel(newModel);
-    localStorage.setItem("forma-provider", newProvider);
-    localStorage.setItem("forma-model", newModel);
+    safeStorage.setItem("forma-provider", newProvider);
+    safeStorage.setItem("forma-model", newModel);
     if (newProvider !== "auto" && newModel !== "auto") {
-      localStorage.setItem(`forma-model-${newProvider}`, newModel);
+      safeStorage.setItem(`forma-model-${newProvider}`, newModel);
       loadModels(newProvider, false, newModel);
     } else {
-      localStorage.setItem("forma-model", "auto");
+      safeStorage.setItem("forma-model", "auto");
       loadModels("auto", false, "auto");
     }
   };
 
   const handleProviderChange = (newProvider: string) => {
     setProvider(newProvider);
-    localStorage.setItem("forma-provider", newProvider);
+    safeStorage.setItem("forma-provider", newProvider);
     loadModels(newProvider);
   };
 
@@ -299,13 +323,13 @@ export function App() {
 
   useEffect(() => {
     loadModels();
-    const saved = localStorage.getItem("forma-active-chat");
+    const saved = safeStorage.getItem("forma-active-chat");
     if (saved) open({ id: saved } as Conversation);
   }, [loadModels, open]);
 
   useEffect(() => {
-    if (id) localStorage.setItem("forma-active-chat", id);
-    else localStorage.removeItem("forma-active-chat");
+    if (id) safeStorage.setItem("forma-active-chat", id);
+    else safeStorage.removeItem("forma-active-chat");
   }, [id]);
 
   useEffect(() => {
@@ -346,19 +370,19 @@ export function App() {
     };
     apply();
     media.addEventListener("change", apply);
-    localStorage.setItem("forma-theme", theme);
+    safeStorage.setItem("forma-theme", theme);
     return () => media.removeEventListener("change", apply);
   }, [theme]);
 
   useEffect(() => {
     if (model) {
-      localStorage.setItem(`forma-model-${provider}`, model);
-      localStorage.setItem("forma-model", model);
+      safeStorage.setItem(`forma-model-${provider}`, model);
+      safeStorage.setItem("forma-model", model);
     }
   }, [model, provider]);
 
   useEffect(() => {
-    localStorage.setItem("forma-temperature", String(temperature));
+    safeStorage.setItem("forma-temperature", String(temperature));
   }, [temperature]);
 
   useEffect(() => {

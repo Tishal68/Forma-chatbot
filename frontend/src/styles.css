@@ -218,7 +218,8 @@ a {
   gap: 2px;
 }
 .chat-row:hover .chat-controls,
-.chat-row:focus-within .chat-controls {
+.chat-row:focus-within .chat-controls,
+.chat-row.selected .chat-controls {
   display: flex;
 }
 .chat-controls button {

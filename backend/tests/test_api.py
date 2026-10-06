@@ -124,3 +124,43 @@ def test_cloud_providers_and_streaming(client, monkeypatch):
     assert 'Fast ' in stream_res.text
     assert 'intelligence!' in stream_res.text
 
+
+def test_error_formatting_edge_cases():
+    from app.main import format_error_message
+    from app.security import get_allowed_origins
+    from app.providers import select_auto_model
+
+    # 1. Test error response where 'error' is a string instead of dict
+    dummy_req = httpx.Request('POST', 'https://api.groq.com/chat')
+    resp_str_err = httpx.Response(400, request=dummy_req, json={'error': 'Invalid model parameters'})
+    exc_str = httpx.HTTPStatusError('Error', request=dummy_req, response=resp_str_err)
+    msg = format_error_message(exc_str, 'groq')
+    assert 'Invalid model parameters' in msg
+
+    # 2. Test Cloudflare HTML 502/504 gateway error (suppress raw HTML tag leakage)
+    resp_html = httpx.Response(502, request=dummy_req, text='<!DOCTYPE html><html><head><title>502 Bad Gateway</title></head><body>Server Error</body></html>')
+    exc_html = httpx.HTTPStatusError('502 Bad Gateway', request=dummy_req, response=resp_html)
+    msg_html = format_error_message(exc_html, 'groq')
+    assert '<!DOCTYPE' not in msg_html
+    assert '502' in msg_html
+    assert 'outage' in msg_html.lower()
+
+    # 3. Test 403 Forbidden
+    resp_403 = httpx.Response(403, request=dummy_req, text='Forbidden')
+    exc_403 = httpx.HTTPStatusError('403 Forbidden', request=dummy_req, response=resp_403)
+    msg_403 = format_error_message(exc_403, 'openrouter')
+    assert 'forbidden' in msg_403.lower()
+
+    # 4. Test 413 Payload Too Large
+    resp_413 = httpx.Response(413, request=dummy_req, text='Too Large')
+    exc_413 = httpx.HTTPStatusError('413 Payload Too Large', request=dummy_req, response=resp_413)
+    msg_413 = format_error_message(exc_413, 'openai')
+    assert 'too large' in msg_413.lower()
+
+    # 5. Test select_auto_model with images when no provider is configured
+    try:
+        select_auto_model(has_images=True, has_documents=False, is_web_search=False, content="look", healthy_providers=[])
+        assert False, "Should have raised ValueError"
+    except ValueError as ve:
+        assert 'vision' in str(ve).lower() or 'images' in str(ve).lower()
+

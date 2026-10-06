@@ -296,23 +296,39 @@ def format_error_message(exc: Exception, provider: str = 'groq') -> str:
         try:
             err_json = exc.response.json()
             if isinstance(err_json, dict):
-                err_msg = err_json.get('error', {}).get('message', '') or err_json.get('detail', '')
+                err_val = err_json.get('error')
+                if isinstance(err_val, dict):
+                    err_msg = err_val.get('message', '') or str(err_val)
+                elif isinstance(err_val, str):
+                    err_msg = err_val
+                elif err_json.get('detail'):
+                    err_msg = str(err_json.get('detail'))
             elif isinstance(err_json, list) and err_json and isinstance(err_json[0], dict):
-                err_msg = err_json[0].get('error', {}).get('message', '')
+                err_val = err_json[0].get('error')
+                if isinstance(err_val, dict):
+                    err_msg = err_val.get('message', '')
+                elif isinstance(err_val, str):
+                    err_msg = err_val
         except Exception:
             try:
-                err_msg = exc.response.text[:200]
+                raw_text = exc.response.text.strip()
+                if not raw_text.startswith(('<', '<!DOCTYPE', '<html', '<head', '<body')):
+                    err_msg = raw_text[:200]
             except Exception:
                 err_msg = ""
 
         if status_code == 401:
             return f'Invalid or revoked API key for {pname}. Please check {config.get("api_key_env")} in server settings.'
+        if status_code == 403:
+            return f'Access forbidden by {pname} (403). Check API key permissions and regional availability.'
         if status_code == 429:
             if 'credit' in err_msg.lower() or 'quota' in err_msg.lower() or 'billing' in err_msg.lower():
                 return f'Quota exceeded for {pname}: You have no credits remaining. Please check your account billing.'
             return f'Rate limit exceeded for {pname}. Please wait a moment and try again.'
         if status_code == 404:
             return f'Model not found on {pname}. {err_msg or "Please select another model in settings."}'
+        if status_code == 413:
+            return f'Request payload too large for {pname}. Try reducing attached files or conversation length.'
         if status_code in (502, 503, 504):
             return f'{pname} is currently experiencing high demand or an outage ({status_code}). Please try again shortly or switch to another provider.'
         if err_msg:
@@ -899,11 +915,14 @@ async def stream_chat_response(body: ChatPayload, request: Request):
         full_user_content = f'{search_context}\n\nUser Question:\n{full_user_content}'
 
     # Load base64 for images
+    valid_image_attachments = []
     image_b64s = []
     for img in image_attachments:
         try:
             with open(img['file_path'], 'rb') as f:
-                image_b64s.append(base64.b64encode(f.read()).decode('ascii'))
+                b64 = base64.b64encode(f.read()).decode('ascii')
+                valid_image_attachments.append(img)
+                image_b64s.append(b64)
         except Exception as e:
             log.warning('Failed to load image %s: %s', img['file_path'], e)
 
@@ -950,8 +969,9 @@ async def stream_chat_response(body: ChatPayload, request: Request):
                 )
 
             if conv['title'] == 'New chat':
-                auto_title = ' '.join(display_user_text.split()[:8])[:60]
-                db.execute('UPDATE conversations SET title = ? WHERE id = ?', (auto_title, cid))
+                auto_title = ' '.join(display_user_text.split()[:8])[:60].strip()
+                if auto_title:
+                    db.execute('UPDATE conversations SET title = ? WHERE id = ?', (auto_title, cid))
 
         history = [
             dict(r)
@@ -1021,7 +1041,7 @@ async def stream_chat_response(body: ChatPayload, request: Request):
                     if image_b64s and cloud_messages:
                         last_text = cloud_messages[-1]['content']
                         multimodal_content = [{'type': 'text', 'text': last_text}]
-                        for img, b64 in zip(image_attachments, image_b64s):
+                        for img, b64 in zip(valid_image_attachments, image_b64s):
                             multimodal_content.append({
                                 'type': 'image_url',
                                 'image_url': {'url': f"data:{img['content_type']};base64,{b64}"}
@@ -1088,10 +1108,16 @@ async def stream_chat_response(body: ChatPayload, request: Request):
                         async for line in response.aiter_lines():
                             if not line:
                                 continue
-                            item = json.loads(line)
+                            try:
+                                item = json.loads(line)
+                            except json.JSONDecodeError:
+                                continue
                             if item.get('error'):
+                                err_text = item.get('error')
                                 raise ValueError(
-                                    'Ollama could not generate a response. Check the selected model and server logs.'
+                                    f'Ollama error: {err_text}'
+                                    if isinstance(err_text, str)
+                                    else 'Ollama could not generate a response. Check the selected model and server logs.'
                                 )
                             delta = item.get('message', {}).get('content', '')
                             if delta:
@@ -1132,6 +1158,7 @@ async def stream_chat_response(body: ChatPayload, request: Request):
 
     async def event_stream():
         try:
+            yield ': connected\n\n'
             while True:
                 try:
                     item = await asyncio.wait_for(queue.get(), timeout=10.0)

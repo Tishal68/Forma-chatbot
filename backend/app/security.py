@@ -233,9 +233,15 @@ def get_allowed_origins() -> set[str]:
     if configured:
         allowed.update(x.strip().rstrip('/') for x in configured.split(',') if x.strip())
     if os.getenv('RENDER_EXTERNAL_URL'):
-        allowed.add(os.environ['RENDER_EXTERNAL_URL'].rstrip('/'))
+        render_url = os.environ['RENDER_EXTERNAL_URL'].strip().rstrip('/')
+        if not render_url.startswith(('http://', 'https://')):
+            render_url = f'https://{render_url}'
+        allowed.add(render_url)
     if os.getenv('RAILWAY_PUBLIC_DOMAIN'):
-        allowed.add('https://' + os.environ['RAILWAY_PUBLIC_DOMAIN'].rstrip('/'))
+        railway_dom = os.environ['RAILWAY_PUBLIC_DOMAIN'].strip().rstrip('/')
+        if not railway_dom.startswith(('http://', 'https://')):
+            railway_dom = f'https://{railway_dom}'
+        allowed.add(railway_dom)
     return allowed
 
 
