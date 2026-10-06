@@ -305,14 +305,17 @@ export function Header({
                         </div>
                         <div className="provider-model-list">
                           {p.filteredModels.map((m) => {
+                            const unavailable = !p.working || m.chat_compatible === false || !!m.supports_image_generation;
                             const isCurrentActive = !isAuto && provider === p.id && model === m.id;
                             return (
                               <div
                                 key={m.id}
                                 className={`unified-menu-item model-item ${isCurrentActive ? "active" : ""}`}
                                 role="menuitem"
-                                tabIndex={0}
+                                tabIndex={unavailable ? -1 : 0}
+                                aria-disabled={unavailable}
                                 onClick={() => {
+                                  if (unavailable) return;
                                   if (onSelectModel) {
                                     onSelectModel(p.id, m.id);
                                   } else {
@@ -322,6 +325,7 @@ export function Header({
                                   setDropdownOpen(false);
                                 }}
                                 onKeyDown={(e) => {
+                                  if (unavailable) return;
                                   if (e.key === "Enter" || e.key === " ") {
                                     if (onSelectModel) {
                                       onSelectModel(p.id, m.id);

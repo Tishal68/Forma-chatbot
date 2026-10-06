@@ -1,3 +1,5 @@
+import time
+from backend.app.ollama_catalog import model_detail
 import pytest
 import httpx
 from fastapi.testclient import TestClient
@@ -18,38 +20,17 @@ def client(tmp_path, monkeypatch):
 
 
 def test_ollama_model_descriptions_and_capabilities():
-    """Verify known Ollama models receive concise 1-sentence descriptions and verified capability tags."""
-    # Vision model
-    vis = get_ollama_model_detail("llama3.2-vision:11b")
-    assert vis["supports_vision"] is True
-    assert vis["supports_reasoning"] is False
-    assert "Vision" in vis["capabilities"]
-    assert "image" in vis["description"].lower()
-
-    # Coding / Reasoning model
-    coder = get_ollama_model_detail("qwen2.5-coder:7b")
-    assert coder["supports_vision"] is False
-    assert coder["supports_reasoning"] is True
-    assert "Code" in coder["capabilities"]
-    assert len(coder["description"].split(".")) >= 1
-
-    # Deep reasoning model
-    r1 = get_ollama_model_detail("deepseek-r1:8b")
-    assert r1["supports_vision"] is False
-    assert r1["supports_reasoning"] is True
-    assert "Reasoning" in r1["capabilities"]
-
-    # Everyday fast chat model
-    chat = get_ollama_model_detail("llama3.2:latest")
-    assert chat["supports_vision"] is False
-    assert chat["is_fast"] is True
-
-    # Unknown model gets neutral description with no guessed capabilities
-    unknown = get_ollama_model_detail("my-custom-finetuned-llama:latest")
-    assert unknown["supports_vision"] is False
-    assert unknown["supports_reasoning"] is False
-    assert unknown["capabilities"] == ["Local"]
-    assert "General-purpose" in unknown["description"] or "Local" in unknown["description"]
+    vision = model_detail('llama3.2-vision:11b', {'capabilities': ['completion', 'vision']}, local=True)
+    assert vision['supports_vision']
+    assert 'Vision' in vision['capabilities']
+    assert 'image' in vision['description']
+    coder = model_detail('qwen2.5-coder:7b', {'capabilities': ['completion']}, local=True)
+    assert not coder['supports_reasoning']
+    assert coder['specialty'] == 'code'
+    unknown = model_detail('custom-llava', None, local=True)
+    assert not unknown['supports_vision']
+    assert not unknown['chat_compatible']
+    assert 'could not be verified' in unknown['description']
 
 
 def test_models_endpoint_with_multiple_ollama_models(client, monkeypatch):
@@ -79,6 +60,9 @@ def test_models_endpoint_with_multiple_ollama_models(client, monkeypatch):
                 "status": "ready",
                 "error": None,
                 "models": [m["name"] for m in mock_tags["models"]],
+                "model_details": [model_detail(m['name'], {'capabilities': ['completion'] +
+                    (['vision'] if m['name'] == 'llama3.2-vision:11b' else []) +
+                    (['thinking'] if m['name'] == 'deepseek-r1:14b' else [])}, local=True) for m in mock_tags['models']],
             }
         return {
             "id": provider_name,
@@ -134,111 +118,28 @@ def test_models_endpoint_ollama_unavailable(client, monkeypatch):
     assert "Cannot reach Ollama" in ollama_info["error"]
 
 
-def test_auto_routing_modalities(monkeypatch):
-    """Test Auto mode intelligently routes tasks based on capabilities."""
-    # Setup health cache with both local and cloud options
-    providers._HEALTH_CACHE["ollama"] = (
-        9999999999.0,
-        {
-            "id": "ollama",
-            "configured": True,
-            "working": True,
-            "status": "ready",
-            "error": None,
-            "models": ["llama3.2", "qwen2.5-coder", "llama3.2-vision"],
-        },
-    )
-
-    # 1. Image routing -> must route to vision model (never text-only)
-    p, m, reason = select_auto_model(
-        has_images=True,
-        has_documents=False,
-        is_web_search=False,
-        content="What is this picture?",
-        healthy_providers=["ollama"],
-    )
-    assert p == "ollama"
-    assert m == "llama3.2-vision"
-    assert "local image analysis" in reason
-
-    # 2. Image routing when NO vision model is available -> raises helpful ValueError
-    providers._HEALTH_CACHE["ollama"] = (
-        9999999999.0,
-        {
-            "id": "ollama",
-            "configured": True,
-            "working": True,
-            "status": "ready",
-            "error": None,
-            "models": ["llama3.2", "mistral"],
-        },
-    )
-    with pytest.raises(ValueError) as exc:
-        select_auto_model(
-            has_images=True,
-            has_documents=False,
-            is_web_search=False,
-            content="Check this screenshot",
-            healthy_providers=["ollama"],
-        )
-    assert "vision" in str(exc.value).lower()
-
-    # 3. Coding prompt -> routes to coding/reasoning model
-    p, m, reason = select_auto_model(
-        has_images=False,
-        has_documents=False,
-        is_web_search=False,
-        content="def quicksort(arr):\n    # TODO: implement",
-        healthy_providers=["ollama"],
-    )
-    assert p == "ollama"
-    assert m == "llama3.2" or "reasoning" in reason or "code" in reason.lower()
-
-    # 4. Complex reasoning prompt with DeepSeek R1 installed
-    providers._HEALTH_CACHE["ollama"] = (
-        9999999999.0,
-        {
-            "id": "ollama",
-            "configured": True,
-            "working": True,
-            "status": "ready",
-            "error": None,
-            "models": ["llama3.2", "deepseek-r1"],
-        },
-    )
-    p, m, reason = select_auto_model(
-        has_images=False,
-        has_documents=False,
-        is_web_search=False,
-        content="Prove step by step that the square root of 2 is irrational.",
-        healthy_providers=["ollama"],
-    )
-    assert p == "ollama"
-    assert m == "deepseek-r1"
-    assert "reasoning" in reason.lower()
-
-    # 5. Documents prompt -> routes to local text model
-    p, m, reason = select_auto_model(
-        has_images=False,
-        has_documents=True,
-        is_web_search=False,
-        content="Summarize this PDF",
-        healthy_providers=["ollama"],
-    )
-    assert p == "ollama"
-    assert "document" in reason.lower()
-
-    # 6. General chat -> routes to fast chat model
-    p, m, reason = select_auto_model(
-        has_images=False,
-        has_documents=False,
-        is_web_search=False,
-        content="Good morning, tell me a quick joke.",
-        healthy_providers=["ollama"],
-    )
-    assert p == "ollama"
-    assert m == "llama3.2"
-    assert "chat" in reason.lower()
+@pytest.mark.parametrize('content,images,docs,search,expected', [
+    ('Hello', False, False, False, 'llama3.2'),
+    ('Write code', False, False, False, 'qwen2.5-coder'),
+    ('Prove this theorem', False, False, False, 'deepseek-r1'),
+    ('Read this', True, False, False, 'custom-vision'),
+    ('Summarize', False, True, False, 'deepseek-r1'),
+    ('Latest news', False, False, True, 'deepseek-r1'),
+])
+def test_auto_routing_modalities(monkeypatch, content, images, docs, search, expected):
+    caps = {'llama3.2': ['completion'], 'qwen2.5-coder': ['completion'],
+            'deepseek-r1': ['completion', 'thinking'], 'custom-vision': ['completion', 'vision']}
+    state = {'working': True, 'models': list(caps), 'model_details': [
+        model_detail(name, {'capabilities': flags}, local=True) for name, flags in caps.items()]}
+    monkeypatch.setattr(providers, '_HEALTH_CACHE', {'ollama': (time.time(), state)})
+    p, m, reason = select_auto_model(images, docs, search, content, ['ollama'])
+    assert p == 'ollama' and m == expected
+    assert reason
+    with pytest.raises(ValueError):
+        select_auto_model(images, docs, search, content, [])
+    state['working'] = False
+    with pytest.raises(ValueError):
+        select_auto_model(images, docs, search, content, ['ollama'])
 
 
 def test_manual_model_selection_not_overridden(client, monkeypatch):

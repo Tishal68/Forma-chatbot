@@ -122,9 +122,9 @@ export function App() {
   const currentProviderInfo = providers.find((p) => p.id === provider);
   const ready = Boolean(
     connected &&
-      (isAuto ||
+      (isAuto ? providers.some((p) => p.working) :
         ((currentProviderInfo ? currentProviderInfo.working : true) &&
-          models.includes(model))),
+          models.includes(model) && currentDetail?.chat_compatible !== false && !currentDetail?.supports_image_generation)),
   );
 
   useEffect(() => {
@@ -143,8 +143,12 @@ export function App() {
     }
   }, [search]);
 
+  const modelRequestVersion = useRef(0);
   const loadModels = useCallback(
     async (targetProvider?: string, forceRefresh = false, explicitModel?: string) => {
+      const version = ++modelRequestVersion.current;
+      targetProvider = targetProvider || safeStorage.getItem("forma-provider") || "auto";
+      explicitModel = explicitModel || safeStorage.getItem("forma-model") || "auto";
       setChecking(true);
       try {
         const query = new URLSearchParams();
@@ -152,6 +156,7 @@ export function App() {
         if (forceRefresh) query.set("refresh", "true");
 
         const data = await api<ModelsResponse>("/models?" + query.toString());
+        if (version !== modelRequestVersion.current) return;
         if (data.providers && data.providers.length > 0) {
           setProviders(data.providers);
         }
@@ -170,25 +175,10 @@ export function App() {
           return;
         }
 
-        setModel((old) => {
-          // If the user previously chose a specific model that exists in data.models, keep it!
-          if (old && old !== "auto" && data.models.includes(old)) {
-            return old;
-          }
-          const savedForProvider = safeStorage.getItem(`forma-model-${activeProvider}`);
-          if (savedForProvider && savedForProvider !== "auto" && data.models.includes(savedForProvider)) {
-            return savedForProvider;
-          }
-          const savedGeneral = safeStorage.getItem("forma-model");
-          if (savedGeneral && savedGeneral !== "auto" && data.models.includes(savedGeneral)) {
-            return savedGeneral;
-          }
-          return "auto";
-        });
       } catch {
-        setConnected(false);
+        if (version === modelRequestVersion.current) setConnected(false);
       } finally {
-        setChecking(false);
+        if (version === modelRequestVersion.current) setChecking(false);
       }
     },
     [],
@@ -235,9 +225,8 @@ export function App() {
       (f) => f.type.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(f.name),
     );
     if (hasImage && !isAuto && (!currentDetail || !currentDetail.supports_vision)) {
-      handleSelectModel("auto", "auto");
-      setStatus("Auto-switched to Vision model for image analysis");
-      setTimeout(() => setStatus(""), 3500);
+      setError("Your selected model does not have verified image support. Choose a vision model or switch to Auto.");
+      return;
     }
 
     for (const file of fileArray) {

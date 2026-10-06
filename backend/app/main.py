@@ -46,6 +46,7 @@ log = logging.getLogger('forma')
 # Active generation tasks mapped by conversation ID and owner visitor ID
 active: dict[str, asyncio.Task] = {}
 active_task_owners: dict[str, str] = {}
+pending: dict[str, str] = {}
 
 
 def now() -> str:
@@ -249,6 +250,8 @@ def get_conversation_or_404(cid: str, visitor_id: str) -> dict:
 
 
 def assert_conversation_idle(cid: str):
+    if cid in pending:
+        raise HTTPException(status_code=409, detail='A response is being prepared. Please wait.')
     if cid in active:
         if active[cid].done():
             active.pop(cid, None)
@@ -379,11 +382,11 @@ async def list_models(provider: str | None = None, refresh: bool = False):
         p_models = []
         if pid == 'ollama':
             installed = h.get('models', [])
-            raw_models = installed if installed else ([settings.OLLAMA_MODEL] if not h["working"] else [])
+            raw_models = installed
             for m in raw_models:
-                p_models.append(get_ollama_model_detail(m))
+                p_models.append(next((d for d in h.get('model_details', []) if d['id'] == m), get_ollama_model_detail(m)))
         else:
-            p_models = [dict(m) for m in pdata.get("models", [])]
+            p_models = [dict(m) for m in pdata.get("models", []) if m["id"] in h.get("models", [])]
 
         providers_summary.append({
             "id": pid,
@@ -412,11 +415,11 @@ async def list_models(provider: str | None = None, refresh: bool = False):
 
     if active_p == 'ollama':
         installed = phealth.get('models', [])
-        models = installed if installed else ([settings.OLLAMA_MODEL] if not phealth.get("working") else [])
-        details = [get_ollama_model_detail(m) for m in models]
+        models = installed
+        details = [next((d for d in phealth.get('model_details', []) if d['id'] == m), get_ollama_model_detail(m)) for m in models]
         default_m = settings.OLLAMA_MODEL if settings.OLLAMA_MODEL in models else (models[0] if models else settings.OLLAMA_MODEL)
     else:
-        curated = pconfig.get("models", [])
+        curated = [m for m in pconfig.get("models", []) if m["id"] in phealth.get("models", [])]
         models = [m["id"] for m in curated]
         details = curated
         default_m = pconfig["default_model"]
@@ -581,7 +584,7 @@ async def clear_all_conversations(request: Request):
 
         # Check if any conversation belonging to this visitor is actively generating
         for cid in cids:
-            if cid in active and not active[cid].done():
+            if cid in pending or (cid in active and not active[cid].done()):
                 raise HTTPException(
                     status_code=409,
                     detail='Stop active generation before clearing chats.',
@@ -792,30 +795,43 @@ class ChatPayload(BaseModel):
 
 @app.post('/api/chat')
 async def stream_chat_response(body: ChatPayload, request: Request):
+    cid = body.conversation_id
+    visitor = request.state.visitor_id
+    get_conversation_or_404(cid, visitor)
+    assert_conversation_idle(cid)
+    running = {c: active_task_owners.get(c) for c, task in active.items() if not task.done()}
+    running.update(pending)
+    if len(running) >= settings.MAX_CONCURRENT_GLOBAL or sum(v == visitor for v in running.values()) >= settings.MAX_CONCURRENT_PER_VISITOR:
+        raise HTTPException(status_code=429, detail='A generation is already in progress. Please wait and retry.')
+    pending[cid] = visitor
+    try:
+        return await prepare_chat_response(body, request)
+    finally:
+        pending.pop(cid, None)
+
+
+async def prepare_chat_response(body: ChatPayload, request: Request):
     """Stream chat completion via Server-Sent Events (SSE)."""
     visitor_id = request.state.visitor_id
     cid = body.conversation_id
     conv = get_conversation_or_404(cid, visitor_id)
-    assert_conversation_idle(cid)
 
-    # Concurrency check per visitor
-    v_active = [
-        c for c, t in active.items()
-        if not t.done() and active_task_owners.get(c) == visitor_id
-    ]
-    if len(v_active) >= settings.MAX_CONCURRENT_PER_VISITOR:
-        raise HTTPException(
-            status_code=429,
-            detail='A generation is already in progress for your session. Please wait or stop the current generation.',
-        )
-
-    # Global concurrency check
-    g_active = [c for c, t in active.items() if not t.done()]
-    if len(g_active) >= settings.MAX_CONCURRENT_GLOBAL:
-        raise HTTPException(
-            status_code=429,
-            detail='The server is currently processing the maximum number of concurrent requests. Please try again in a few seconds.',
-        )
+    if body.regenerate:
+        if body.edit_message_id is not None:
+            raise HTTPException(status_code=422, detail='Cannot edit and regenerate together.')
+        with connect() as db:
+            original = db.execute(
+                "SELECT * FROM messages WHERE conversation_id = ? AND role = 'user' ORDER BY id DESC LIMIT 1",
+                (cid,),
+            ).fetchone()
+            if not original:
+                raise HTTPException(status_code=400, detail='No message to regenerate.')
+            saved_ids = [row['id'] for row in db.execute(
+                'SELECT id FROM attachments WHERE conversation_id = ? AND message_id = ?',
+                (cid, original['id']),
+            )]
+            body = body.model_copy(update={'content': original['content'], 'attachment_ids': saved_ids,
+                                           'web_search': bool(original['web_search'])})
 
     # Attachments validation
     attachments = []
@@ -846,6 +862,7 @@ async def stream_chat_response(body: ChatPayload, request: Request):
     configured_providers = [p for p in PROVIDERS if is_provider_configured(p)]
     auto_explanation = ""
     if is_auto:
+        await asyncio.gather(*(probe_provider_health(p) for p in configured_providers))
         from .providers import select_auto_model
         try:
             provider, model, auto_explanation = select_auto_model(
@@ -868,6 +885,7 @@ async def stream_chat_response(body: ChatPayload, request: Request):
             )
         model = req_model or pconfig['default_model']
         if has_images:
+            await probe_provider_health(provider)
             is_supported, explanation = check_vision_support(provider, model)
             if not is_supported:
                 raise HTTPException(status_code=400, detail=explanation)
@@ -925,6 +943,7 @@ async def stream_chat_response(body: ChatPayload, request: Request):
                 image_b64s.append(b64)
         except Exception as e:
             log.warning('Failed to load image %s: %s', img['file_path'], e)
+            raise HTTPException(status_code=400, detail='An attached image is no longer available. Upload it again.')
 
     with connect() as db:
         if body.edit_message_id is not None:
@@ -1008,6 +1027,7 @@ async def stream_chat_response(body: ChatPayload, request: Request):
                     current_model=model,
                     has_images=has_images,
                     healthy_providers=configured_providers,
+                    has_documents=has_docs, is_web_search=body.web_search, content=body.content,
                 ):
                     candidates.append((fb_p, fb_m, fb_reason))
 
@@ -1089,25 +1109,30 @@ async def stream_chat_response(body: ChatPayload, request: Request):
                                 if response.status_code >= 400:
                                     await response.aread()
                                 response.raise_for_status()
+                                terminal = False
                                 async for line in response.aiter_lines():
                                     if not line:
                                         continue
                                     line_str = line.strip()
-                                    if line_str.startswith('data: '):
-                                        payload_str = line_str[6:].strip()
+                                    if line_str.startswith('data:'):
+                                        payload_str = line_str[5:].strip()
                                         if payload_str == '[DONE]':
-                                            status = 'complete'
+                                            terminal = True
                                             break
                                         try:
                                             item = json.loads(payload_str)
+                                            if item.get('error'):
+                                                raise ValueError('The provider reported a streaming error. Please retry or choose another model.')
                                             choices = item.get('choices', [])
                                             if choices:
                                                 delta = choices[0].get('delta', {}).get('content', '')
                                                 if delta:
                                                     text += delta
                                                     await emit('token', content=delta)
-                                        except json.JSONDecodeError:
-                                            continue
+                                        except json.JSONDecodeError as exc:
+                                            raise ValueError('The provider sent an invalid streaming response.') from exc
+                                if not terminal or not text:
+                                    raise ValueError('The model connection closed without a complete answer. Please retry.')
                                 status = 'complete'
                         else:
                             # Native Ollama streaming
@@ -1187,6 +1212,10 @@ async def stream_chat_response(body: ChatPayload, request: Request):
                         break
         except asyncio.CancelledError:
             status = 'stopped'
+        except Exception as exc:
+            status = 'error'
+            log.exception('Unexpected generation failure')
+            await emit('error', message=format_error_message(exc, provider))
 
         finally:
             try:
@@ -1199,10 +1228,13 @@ async def stream_chat_response(body: ChatPayload, request: Request):
             finally:
                 active.pop(cid, None)
                 active_task_owners.pop(cid, None)
-                try:
-                    queue.put_nowait({'type': 'done', status: status})
-                except asyncio.QueueFull:
-                    pass
+                if status == 'stopped':
+                    try:
+                        queue.put_nowait({'type': 'done', 'status': status})
+                    except asyncio.QueueFull:
+                        pass
+                else:
+                    await emit('done', status=status)
 
     task = asyncio.create_task(generate())
     active[cid] = task

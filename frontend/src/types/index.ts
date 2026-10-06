@@ -22,6 +22,8 @@ export interface ModelDetail {
   badge?: string;
   description?: string;
   supports_vision?: boolean;
+  chat_compatible?: boolean;
+  supports_image_generation?: boolean;
   supports_reasoning?: boolean;
   supports_search?: boolean;
   is_fast?: boolean;
