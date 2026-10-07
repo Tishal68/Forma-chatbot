@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   BookOpen,
   Code2,
@@ -70,15 +70,16 @@ interface WelcomeViewProps {
 }
 
 export function WelcomeView({ onSelectPrompt }: WelcomeViewProps) {
+  const [showMore, setShowMore] = useState(false);
   return (
     <section className="welcome">
       <div className="welcome-symbol">✳</div>
-      <div className="eyebrow">YOUR PRIVATE & ADAPTIVE AI CHATBOT</div>
+      <div className="eyebrow">YOUR THINKING SPACE</div>
       <h1>How can I help you today?</h1>
-      <p>Ask a question, analyze files, search the web, or write code — Auto mode adapts to your task.</p>
+      <p>Ask a question, work with files, or create something new.</p>
 
       <div className="suggestions">
-        {defaultSuggestions.map((s) => (
+        {defaultSuggestions.slice(0, showMore ? defaultSuggestions.length : 4).map((s) => (
           <button
             key={s.title}
             type="button"
@@ -98,8 +99,11 @@ export function WelcomeView({ onSelectPrompt }: WelcomeViewProps) {
         ))}
       </div>
 
+      <button type="button" className="welcome-more" aria-expanded={showMore} onClick={() => setShowMore(!showMore)}>
+        {showMore ? "Fewer ideas" : "More ideas"}
+      </button>
       <div className="privacy-note">
-        <ShieldCheck size={15} /> Private visitor session. Your chats and uploaded files are isolated and secure.
+        <ShieldCheck size={15} /> Chats are saved to this browser’s visitor session.
       </div>
     </section>
   );

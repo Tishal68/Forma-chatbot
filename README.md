@@ -171,4 +171,33 @@ Shortlists prefer different providers where possible. A feature with only one op
 
 Ollama capabilities come from `/api/tags` or `/api/show`. OpenRouter input/output modalities and reasoning parameters come from its live model metadata. Cloud models without detailed capability discovery use the curated backend catalog intersected with the provider's current model list. See [Ollama model details](https://docs.ollama.com/api-reference/show-model-details) and [OpenRouter model metadata](https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties).
 
-Documents use this app's text extraction, and web answers use this app's search pipeline. These are not claims of native PDF or web-browsing support. Image generation is marked unsupported until an image-output provider adapter and UI are implemented; vision models are not presented as image generators.
+Documents use this app's text extraction, and web answers use this app's search pipeline. These are not claims of native PDF or web-browsing support. Image creation uses dedicated Ollama/OpenRouter adapters; vision-only models are never presented as image generators.
+
+
+### Creating images
+
+1. Open the model menu and choose **Image generation** under **Choose by task** to see models your connected services report.
+2. Select an image model, or select Auto and turn on **Create image** in the composer.
+3. Describe the desired image and send. Auto also recognizes explicit requests such as "Generate an image of a forest"; manually selected chat models are never overridden. Ollama progress is shown when the server supplies diffusion-step counts. OpenRouter requests show a generation indicator until the image is ready.
+4. Open or download the result from its image card. Images persist with the conversation in `ATTACHMENTS_DIR`; production needs a persistent volume. Stop cancels the upstream request, although cloud work already started may still incur charges.
+
+**Ollama:** the experimental `/api/generate` image protocol is supported (`image`, `completed`, `total`, `done`). Discovery recognizes Ollama's actual `image` capability, not the model name. Z-Image Turbo and FLUX.2 Klein are examples, but installing a model does not guarantee the server can run it. Ollama's [experimental announcement](https://ollama.com/blog/image-generation) documents macOS support; current upstream revisions can reject image generation. Connect `OLLAMA_BASE_URL` to a server/version that actually supports it. Do not point a hosted app at your laptop's localhost. Normal local Ollama needs no API key.
+
+**OpenRouter:** keep `OPENROUTER_API_KEY` on the backend. Forma discovers image models via `/images/models` and generates via `/images`, following the [dedicated image API](https://openrouter.ai/docs/guides/overview/multimodal/image-generation). Account credits, model access, and charges apply. A model being listed is not an inference-quota guarantee.
+
+Version 1 supports text-to-image raster output (PNG, JPEG, WebP), preview, download, stop, and regeneration of the original prompt. Image editing/reference uploads, SVG output, and video generation are not implemented. Turn off web search and remove attachments before creating an image. Image requests are not automatically retried after upstream failures, to avoid duplicate billed work. Manual model choices remain pinned.
+
+Generated output is size-bounded, decoded and validated as raster imagery, and served only to the owning visitor session. Generated files never become pending user uploads after regeneration. Uploaded documents remain download-only.
+
+### Focused verification
+
+```bash
+python -m pytest -q
+cd frontend
+npm ci
+npx playwright install chromium
+npm run test:ui
+npm run build
+```
+
+`test:ui` starts its own Vite server and mocks provider responses. Backend adapter tests also use controlled image fixtures. These tests verify integration behavior, not image quality or current paid-account access. Test a live image request after deploying with an available image provider.

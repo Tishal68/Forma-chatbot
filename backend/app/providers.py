@@ -405,6 +405,19 @@ def recommend_models(health, *, limit=3, **task):
     return options
 
 
+def image_options(health):
+    options = []
+    for provider in ('ollama', 'openrouter'):
+        state = health.get(provider, {})
+        if not state.get('working'):
+            continue
+        for detail in state.get('model_details', []):
+            if detail['id'] in state.get('models', []) and detail.get('supports_image_generation'):
+                options.append({'provider': provider, 'model': detail['id'],
+                                'reason': f"Selected {detail.get('name', detail['id'])} for image generation."})
+    return options
+
+
 def feature_coverage(health):
     coverage = {}
     for key, (label, task) in TASKS.items():
@@ -417,9 +430,12 @@ def feature_coverage(health):
                        else 'Only one verified option is available; there is no verified backup.' if count
                        else 'No verified option is available from your connected providers.',
         }
+    images = image_options(health)[:3]
     coverage['image_generation'] = {
-        'label': 'Image generation', 'options': [], 'status': 'unsupported',
-        'message': 'This chat currently supports image understanding, not image output. An image-generation integration is required.',
+        'label': 'Image generation', 'options': images,
+        'status': 'ready' if len(images) >= 2 else 'limited' if images else 'unavailable',
+        'message': f'{len(images)} image-generation options. Cloud usage may incur provider charges.' if images
+                   else 'No image generator is connected. Use a compatible experimental Ollama server or configure OpenRouter image models.',
     }
     return coverage
 
@@ -562,7 +578,7 @@ async def probe_provider_health(provider_name: str, force: bool = False) -> dict
                             return model_detail(name, data, local=base_url.startswith(("http://localhost", "http://127.0.0.1")))
 
                     details = await asyncio.gather(*(describe(name) for name in installed))
-                    has_chat = any(m.get("chat_compatible") for m in details)
+                    has_chat = any(m.get("chat_compatible") or m.get("supports_image_generation") for m in details)
                     res = {
                         "id": "ollama",
                         "configured": True,
@@ -654,6 +670,26 @@ async def probe_provider_health(provider_name: str, force: bool = False) -> dict
                             detail['capabilities'].append('Vision')
                         if detail['supports_reasoning']:
                             detail['capabilities'].append('Reasoning')
+                if p_lower == 'openrouter':
+                    try:
+                        image_list = await c.get('https://openrouter.ai/api/v1/images/models', headers=headers)
+                        image_list.raise_for_status()
+                        for image_model in image_list.json().get('data', []):
+                            architecture = image_model.get('architecture') or {}
+                            if 'image' not in architecture.get('output_modalities', []) or 'text' not in architecture.get('input_modalities', []):
+                                continue
+                            mid = image_model.get('id')
+                            if not isinstance(mid, str) or not mid:
+                                continue
+                            image_detail = {'id': mid, 'name': image_model.get('name') or mid, 'provider': 'openrouter',
+                                'description': 'Creates images from text prompts through OpenRouter.', 'badge': 'Image generation',
+                                'chat_compatible': False, 'supports_image_generation': True,
+                                'supports_vision': False, 'supports_reasoning': False, 'capabilities': ['Image generation']}
+                            details = [d for d in details if d['id'] != mid] + [image_detail]
+                            if mid not in available:
+                                available.append(mid)
+                    except (httpx.HTTPError, ValueError):
+                        pass  # Image discovery failure must not disable working chat models.
                 res = {
                     "id": p_lower,
                     "configured": True,

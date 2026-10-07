@@ -32,9 +32,9 @@ def model_detail(name: str, shown: dict[str, Any] | None, *, local: bool) -> dic
     specialty = SPECIALTIES.get(name.lower().removesuffix(":cloud")) or SPECIALTIES.get(family)
     # A model that cannot chat should still be visible, but never offered to chat routing.
     chat_compatible = "completion" in verified
-    image_generation = bool(verified & {"image-generation", "image_generation", "text-to-image"})
+    image_generation = bool(verified & {"image", "image-generation", "image_generation", "text-to-image"})
     if image_generation:
-        description = "Creates images from prompts; image generation is not available in this chat yet."
+        description = "Creates images from prompts on an Ollama server with experimental image generation enabled."
     elif specialty:
         description = specialty
     elif "vision" in verified:

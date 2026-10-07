@@ -3,12 +3,14 @@ import base64
 import json
 import logging
 import os
+import re
 import shutil
 import sqlite3
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
 
 import httpx
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
@@ -23,12 +25,14 @@ from .extractors import check_vision_support, extract_file_content, sanitize_fil
 from .providers import (
     PROVIDERS,
     feature_coverage,
+    image_options,
     get_api_key,
     get_ollama_model_detail,
     get_provider_config,
     is_provider_configured,
     probe_provider_health,
 )
+from .image_output import generate_image, save_image
 from .search import SearchError, format_search_context, perform_search
 from .security import (
     apply_security_headers,
@@ -292,7 +296,7 @@ def format_error_message(exc: Exception, provider: str = 'groq') -> str:
             url = os.getenv('OLLAMA_BASE_URL') or 'http://localhost:11434'
             return f'Unable to connect to Ollama at {url}. Ensure Ollama is running and accessible.'
         return f'Unable to connect to {pname}. Check network connectivity and server status.'
-    if isinstance(exc, httpx.TimeoutException):
+    if isinstance(exc, (httpx.TimeoutException, TimeoutError)):
         return f'{pname} generation timed out. Try again or choose a faster model.'
     if isinstance(exc, httpx.HTTPStatusError):
         status_code = exc.response.status_code
@@ -501,7 +505,7 @@ async def get_conversation(cid: str, request: Request):
         attachments = db.execute(
             '''
             SELECT id, conversation_id, message_id, filename, content_type,
-                   size_bytes, page_count, is_image, created_at
+                   size_bytes, page_count, is_image, generated, created_at
             FROM attachments WHERE conversation_id = ? ORDER BY created_at
             ''',
             (cid,),
@@ -530,7 +534,7 @@ async def get_conversation(cid: str, request: Request):
 
         result['messages'] = parsed_messages
         result['pending_attachments'] = [
-            dict(a) for a in attachments if a['message_id'] is None
+            dict(a) for a in attachments if a['message_id'] is None and not a['generated']
         ]
     return result
 
@@ -709,7 +713,7 @@ async def list_attachments(cid: str, request: Request):
         rows = db.execute(
             '''
             SELECT id, conversation_id, message_id, filename, content_type,
-                   size_bytes, page_count, is_image, created_at
+                   size_bytes, page_count, is_image, generated, created_at
             FROM attachments WHERE conversation_id = ? ORDER BY created_at
             ''',
             (cid,),
@@ -725,7 +729,7 @@ async def download_attachment(cid: str, aid: str, request: Request):
     get_conversation_or_404(cid, visitor_id)
     with connect() as db:
         row = db.execute(
-            'SELECT file_path, filename, content_type FROM attachments WHERE id = ? AND conversation_id = ?',
+            'SELECT file_path, filename, content_type, generated FROM attachments WHERE id = ? AND conversation_id = ?',
             (aid, cid),
         ).fetchone()
         if not row:
@@ -739,6 +743,7 @@ async def download_attachment(cid: str, aid: str, request: Request):
         path=str(file_path),
         filename=row['filename'],
         media_type=row['content_type'],
+        content_disposition_type='inline' if row['generated'] and row['content_type'] in ('image/png', 'image/jpeg', 'image/webp') and not request.url.path.endswith('/download') else 'attachment',
     )
 
 
@@ -792,7 +797,18 @@ class ChatPayload(BaseModel):
     edit_message_id: int | None = None
     attachment_ids: list[str] = Field(default_factory=list)
     web_search: bool = False
+    output_mode: Literal["chat", "image"] = "chat"
 
+
+
+def remove_generated_images(db, cid, from_message):
+    rows = db.execute('SELECT id, file_path FROM attachments WHERE conversation_id = ? AND message_id >= ? AND generated = 1', (cid, from_message)).fetchall()
+    root = settings.ATTACHMENTS_DIR.resolve()
+    for row in rows:
+        path = Path(row['file_path']).resolve()
+        if path.is_relative_to(root):
+            path.unlink(missing_ok=True)
+        db.execute('DELETE FROM attachments WHERE id = ?', (row['id'],))
 
 
 @app.post('/api/chat')
@@ -833,7 +849,7 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
                 (cid, original['id']),
             )]
             body = body.model_copy(update={'content': original['content'], 'attachment_ids': saved_ids,
-                                           'web_search': bool(original['web_search'])})
+                                           'web_search': bool(original['web_search']), 'output_mode': original['output_mode']})
 
     # Attachments validation
     attachments = []
@@ -863,7 +879,24 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
 
     configured_providers = [p for p in PROVIDERS if is_provider_configured(p)]
     auto_explanation = ""
-    if is_auto:
+    if is_auto and body.output_mode == 'chat' and re.match(
+        r'^\s*(?:please\s+)?(?:create|generate|draw|paint|make)\s+(?:me\s+)?(?:an?\s+)?(?:image|picture|illustration|logo|poster|photograph)\b',
+        body.content, re.IGNORECASE,
+    ):
+        body = body.model_copy(update={'output_mode': 'image'})
+    output_image = body.output_mode == 'image'
+    if output_image:
+        if attachments or body.web_search:
+            raise HTTPException(status_code=422, detail='Image creation currently accepts text prompts. Remove attachments and turn off web search.')
+        health_results = await asyncio.gather(*(probe_provider_health(p) for p in configured_providers))
+        options = image_options(dict(zip(configured_providers, health_results)))
+        option = next((o for o in options if is_auto or (o['provider'] == req_provider and o['model'] == req_model)), None)
+        if not option:
+            raise HTTPException(status_code=400, detail='No compatible image generator is available for this selection. Choose an image-generation model or connect a supported Ollama/OpenRouter service.')
+        provider, model = option['provider'], option['model']
+        auto_explanation = option['reason'] if is_auto else ''
+        pconfig = get_provider_config(provider)
+    elif is_auto:
         await asyncio.gather(*(probe_provider_health(p) for p in configured_providers))
         from .providers import select_auto_model
         try:
@@ -886,6 +919,10 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
                 detail=f"{pconfig['name']} is not configured on this server. Set the {pconfig.get('api_key_env')} API key in server environment variables.",
             )
         model = req_model or pconfig['default_model']
+        if provider == 'ollama':
+            detail = get_ollama_model_detail(model)
+            if detail.get('supports_image_generation'):
+                raise HTTPException(status_code=400, detail='Switch the composer to Create image to use this model.')
         if has_images:
             await probe_provider_health(provider)
             is_supported, explanation = check_vision_support(provider, model)
@@ -955,6 +992,7 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
             ).fetchone()
             if not target:
                 raise HTTPException(status_code=404, detail='User message not found.')
+            remove_generated_images(db, cid, body.edit_message_id)
             db.execute('DELETE FROM messages WHERE conversation_id = ? AND id >= ?', (cid, body.edit_message_id))
             db.execute("UPDATE conversations SET summary = '', summary_through = 0 WHERE id = ?", (cid,))
             conv['summary'] = ''
@@ -968,6 +1006,7 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
             if not last:
                 raise HTTPException(status_code=400, detail='No message to regenerate.')
             if last['role'] == 'assistant':
+                remove_generated_images(db, cid, last['id'])
                 db.execute('DELETE FROM messages WHERE id = ?', (last['id'],))
             remaining_count = db.execute(
                 'SELECT COUNT(*) FROM messages WHERE conversation_id = ?',
@@ -978,8 +1017,8 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
         else:
             display_user_text = body.content.strip() or (f"Analyze {attachments[0]['filename']}" if attachments else 'Uploaded files')
             uid = db.execute(
-                "INSERT INTO messages(conversation_id, role, content, created_at, web_search) VALUES (?, 'user', ?, ?, ?)",
-                (cid, display_user_text, now(), 1 if body.web_search else 0),
+                "INSERT INTO messages(conversation_id, role, content, created_at, web_search, output_mode) VALUES (?, 'user', ?, ?, ?, ?)",
+                (cid, display_user_text, now(), 1 if body.web_search else 0, body.output_mode),
             ).lastrowid
 
             if body.attachment_ids:
@@ -1010,6 +1049,7 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
             "INSERT INTO messages(conversation_id, role, content, created_at, status, model, auto_reason) VALUES (?, 'assistant', '', ?, 'generating', ?, ?)",
             (cid, now(), saved_model_tag, auto_explanation or None),
         ).lastrowid
+        db.execute('UPDATE messages SET output_mode = ? WHERE id = ?', (body.output_mode, mid))
         db.execute('UPDATE conversations SET updated_at = ? WHERE id = ?', (now(), cid))
 
     queue: asyncio.Queue = asyncio.Queue(maxsize=128)
@@ -1023,7 +1063,7 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
         try:
             from .providers import get_fallback_candidates
             candidates = [(provider, model, auto_explanation)]
-            if is_auto:
+            if is_auto and not output_image:
                 for fb_p, fb_m, fb_reason in get_fallback_candidates(
                     current_provider=provider,
                     current_model=model,
@@ -1063,6 +1103,16 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
 
                 try:
                     async with client_instance as c:
+                        if output_image:
+                            await emit('status', message='Creating your image…')
+                            async def image_progress(message):
+                                await emit('status', message=message)
+                            result = await generate_image(c, curr_provider, curr_model, user_text, image_progress)
+                            attachment = save_image(cid, mid, result, now())
+                            await emit('image', attachment=attachment)
+                            text = 'Here is your image.'
+                            status = 'complete'
+                            break
                         def save_summary(summary_text: str, through_id: int):
                             with connect() as db:
                                 db.execute(

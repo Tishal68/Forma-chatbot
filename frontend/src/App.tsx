@@ -89,6 +89,7 @@ export function App() {
   const [webSearch, setWebSearch] = useState(() => {
     return safeStorage.getItem("forma-web-search") === "true";
   });
+  const [outputMode, setOutputMode] = useState<"chat" | "image">(() => safeStorage.getItem("forma-output-mode") === "image" ? "image" : "chat");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -120,12 +121,16 @@ export function App() {
   const isAuto = provider === "auto" || model === "auto" || !model || model === "";
   const currentDetail = modelDetails.find((d) => d.id === model);
   const currentProviderInfo = providers.find((p) => p.id === provider);
-  const ready = Boolean(
-    connected &&
-      (isAuto ? providers.some((p) => p.working) :
-        ((currentProviderInfo ? currentProviderInfo.working : true) &&
-          models.includes(model) && currentDetail?.chat_compatible !== false && !currentDetail?.supports_image_generation)),
-  );
+  const wantsImage = outputMode === "image" || !!currentDetail?.supports_image_generation;
+  const usable = (detail: import("./types").ModelDetail) => wantsImage
+    ? !!detail.supports_image_generation
+    : detail.chat_compatible !== false && !detail.supports_image_generation;
+  const ready = connected && (isAuto
+    ? providers.some((p) => p.working && p.models?.some(usable))
+    : !!currentProviderInfo?.working && !!currentDetail && usable(currentDetail));
+
+
+  useEffect(() => { safeStorage.setItem("forma-output-mode", outputMode); }, [outputMode]);
 
   useEffect(() => {
     safeStorage.setItem("forma-web-search", String(webSearch));
@@ -187,6 +192,9 @@ export function App() {
   );
 
   const handleSelectModel = (newProvider: string, newModel: string) => {
+    const chosen = providers.find(p => p.id === newProvider)?.models?.find(m => m.id === newModel);
+    if (chosen?.supports_image_generation) { setOutputMode("image"); setWebSearch(false); }
+    else if (chosen) setOutputMode("chat");
     setProvider(newProvider);
     setModel(newModel);
     safeStorage.setItem("forma-provider", newProvider);
@@ -442,7 +450,7 @@ export function App() {
 
     const content = input;
     const currentAttachments = [...attachments];
-    const currentWebSearch = webSearch;
+    const currentWebSearch = wantsImage ? false : webSearch;
     let cid = id;
     const abort = new AbortController();
     controller.current = abort;
@@ -506,6 +514,7 @@ export function App() {
           edit_message_id: edit,
           attachment_ids: currentAttachments.map((a) => a.id),
           web_search: currentWebSearch,
+          output_mode: wantsImage ? "image" : "chat",
         },
         abort.signal,
         (event) => {
@@ -521,6 +530,10 @@ export function App() {
               ),
             );
             setStatus(event.auto_reason ? event.auto_reason : "Thinking…");
+          }
+          if (event.type === "image") {
+            setMessages(old => old.map(m => m.id === assistantId ? {...m, attachments: [event.attachment], content: "Here is your image."} : m));
+            setStatus("");
           }
           if (event.type === "sources") {
             setMessages((old) =>
@@ -741,6 +754,15 @@ export function App() {
         </div>
 
         <Composer
+          imageMode={wantsImage}
+          imageHint={wantsImage ? (!ready ? "Choose an available image-generation model in the model menu." : "Text-to-image · cloud usage may be billed.") : ""}
+          onToggleImageMode={() => {
+            if (currentDetail?.supports_image_generation) {
+              setError("Choose a chat model or Auto in the model menu to return to text chat."); return;
+            }
+            if (!wantsImage && attachments.length) { setError("Remove attached files before creating an image."); return; }
+            setOutputMode(wantsImage ? "chat" : "image"); setWebSearch(false);
+          }}
           ready={ready}
           checking={checking}
           connected={connected}

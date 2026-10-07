@@ -128,12 +128,10 @@ export const Message = memo(function Message({
             >
               {message.auto_reason && <Sparkles size={11} className="auto-model-sparkle" />}
               <span className="message-model-name">
-                {message.model.split(":").pop()?.replace(/^openai\//, "")}
+                {message.model.split(":").slice(1).join(":").replace(/^openai\//, "")}
               </span>
               {message.auto_reason && (
-                <span className="message-auto-reason">
-                  · {message.auto_reason.replace(/^Auto:\s*/i, "")}
-                </span>
+                <span className="message-auto-reason" title={message.auto_reason}> · Auto</span>
               )}
             </span>
           )}
@@ -141,6 +139,9 @@ export const Message = memo(function Message({
         {time && <span className="message-time">{time}</span>}
       </div>
 
+      {assistant && message.auto_reason && <details className="routing-note">
+        <summary>Why this model?</summary><p>{message.auto_reason}</p>
+      </details>}
       {/* Render attached files for user messages */}
       {!assistant && message.attachments && message.attachments.length > 0 && (
         <div className="message-attachments-list">
@@ -157,6 +158,17 @@ export const Message = memo(function Message({
         </div>
       )}
 
+      {assistant && message.attachments?.filter(a => a.generated && a.is_image).map(att => {
+        const url = `/api/conversations/${encodeURIComponent(att.conversation_id)}/attachments/${encodeURIComponent(att.id)}`;
+        return <figure className="generated-image" key={att.id}>
+          <a href={url} target="_blank" rel="noopener noreferrer" aria-label="Open generated image">
+            <img src={url} alt="AI-generated image" loading="lazy" />
+          </a>
+          <figcaption><span>Generated with {message.model?.split(":").slice(1).join(":")}</span>
+            <a href={`${url}/download`} download={att.filename}>Download image</a>
+          </figcaption>
+        </figure>;
+      })}
       {/* Main markdown content */}
       <div className="message-body">
         <ReactMarkdown
@@ -177,20 +189,7 @@ export const Message = memo(function Message({
                 <div className="code-block">
                   <div className="code-toolbar">
                     <span className="code-lang">{lang || "code"}</span>
-                    <button
-                      type="button"
-                      className="copy-code-btn"
-                      onClick={async () => {
-                        try {
-                          await navigator.clipboard.writeText(rawCode);
-                        } catch {}
-                      }}
-                      title="Copy code"
-                      aria-label="Copy code"
-                    >
-                      <Copy size={13} />
-                      <span>Copy</span>
-                    </button>
+                    <CopyButton text={rawCode} label="Copy code" />
                   </div>
                   <div className="code-content">
                     <div className="code-line-numbers" aria-hidden="true">

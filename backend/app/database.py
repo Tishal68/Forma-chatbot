@@ -79,3 +79,9 @@ def initialize():
         if 'auto_reason' not in msg_columns:
             db.execute('ALTER TABLE messages ADD COLUMN auto_reason TEXT')
 
+
+        if 'output_mode' not in msg_columns:
+            db.execute("ALTER TABLE messages ADD COLUMN output_mode TEXT NOT NULL DEFAULT 'chat'")
+        attachment_columns = [r['name'] for r in db.execute('PRAGMA table_info(attachments)')]
+        if 'generated' not in attachment_columns:
+            db.execute('ALTER TABLE attachments ADD COLUMN generated INTEGER NOT NULL DEFAULT 0')

@@ -15,6 +15,9 @@ import {
 import { Attachment } from "../types";
 
 interface ComposerProps {
+  imageMode: boolean;
+  imageHint: string;
+  onToggleImageMode: () => void;
   ready: boolean;
   checking: boolean;
   connected: boolean;
@@ -63,6 +66,7 @@ function getFileIcon(att: Attachment) {
 }
 
 export function Composer({
+  imageMode, imageHint, onToggleImageMode,
   ready,
   checking,
   connected,
@@ -122,13 +126,13 @@ export function Composer({
     e.stopPropagation();
     setDragOver(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      onAttachFiles(e.dataTransfer.files);
+      if (!imageMode && !busy) onAttachFiles(e.dataTransfer.files);
     }
   };
 
   return (
     <div className="composer-area">
-      {!ready && (
+      {!ready && !imageMode && (
         <div className="setup-notice" role="status">
           <div>
             <strong>
@@ -249,7 +253,7 @@ export function Composer({
           ref={textareaRef}
           aria-label="Message Forma"
           rows={1}
-          placeholder={dragOver ? "Drop files to attach…" : "Message Forma…"}
+          placeholder={imageMode ? "Describe an image to create…" : dragOver ? "Drop files to attach…" : "Message Forma…"}
           value={input}
           disabled={loading}
           onChange={(e) => onInputChange(e.target.value)}
@@ -265,13 +269,19 @@ export function Composer({
           }}
         />
 
+        {imageHint && <p className="image-mode-hint" role="status">{imageHint}</p>}
         <div className="composer-bottom">
           <div className="composer-tools">
+            <button type="button" className={`tool-button ${imageMode ? "active" : ""}`}
+              disabled={busy} aria-label="Create image mode" aria-pressed={imageMode} onClick={onToggleImageMode} title="Create an image">
+              <ImageIcon size={17}/><span className="tool-label">Create image</span>
+            </button>
             <button
               type="button"
               className={`tool-button ${attachments.length > 0 ? "has-files" : ""}`}
               aria-label="Attach files (PDF, DOCX, CSV, TXT, Code, Images)"
               title="Attach files (PDF, DOCX, CSV, TXT, Code, Images)"
+              disabled={busy || imageMode}
               onClick={() => fileInputRef.current?.click()}
             >
               <Paperclip size={17} />
@@ -286,6 +296,7 @@ export function Composer({
               className={`tool-button web-search-toggle ${webSearch ? "active" : ""}`}
               aria-label={webSearch ? "Web search: Enabled (Click to disable)" : "Web search: Disabled (Click to enable)"}
               title={webSearch ? "Web search: ON (Real internet search enabled)" : "Web search: OFF (Click to search real-time web)"}
+              disabled={busy || imageMode}
               onClick={onToggleWebSearch}
             >
               <Globe size={17} />

@@ -171,7 +171,7 @@ def test_feature_shortlists_offer_three_real_options(feature):
     assert len(coverage[feature]['options']) == 3
     assert len({o['model'] for o in coverage[feature]['options']}) == 3
     assert not coverage['image_generation']['options']
-    assert coverage['image_generation']['status'] == 'unsupported'
+    assert coverage['image_generation']['status'] == 'unavailable'
 
 
 def test_feature_shortlist_reports_shortage_instead_of_inventing_models():

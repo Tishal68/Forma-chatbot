@@ -7,6 +7,7 @@ export type Attachment = {
   size_bytes: number;
   page_count?: number;
   is_image?: boolean;
+  generated?: boolean;
   created_at: string;
   progress?: number;
   uploading?: boolean;
@@ -29,6 +30,7 @@ export type Message = {
   sources?: WebSearchResult[];
   web_search?: boolean;
   auto_reason?: string;
+  output_mode?: "chat" | "image";
   created_at?: string;
 };
 

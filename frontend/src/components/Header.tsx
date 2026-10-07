@@ -68,6 +68,7 @@ export function Header({
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | "vision" | "reasoning" | "fast" | "local">("all");
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const displayTitle = messagesCount ? title : "Your thinking space";
 
@@ -91,6 +92,7 @@ export function Header({
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape" && dropdownOpen) {
         setDropdownOpen(false);
+        triggerRef.current?.focus();
       }
     }
     if (dropdownOpen) {
@@ -188,6 +190,7 @@ export function Header({
         <div className="unified-selector" ref={dropdownRef}>
           <button
             type="button"
+            ref={triggerRef}
             className={`unified-selector-btn ${dropdownOpen ? "open" : ""}`}
             onClick={() => !busy && setDropdownOpen((prev) => !prev)}
             disabled={busy}
@@ -251,10 +254,10 @@ export function Header({
                     onClick={() => setActiveFilter(filterKey)}
                   >
                     {filterKey === "all" && "All"}
-                    {filterKey === "vision" && "👁️ Vision"}
-                    {filterKey === "reasoning" && "🧠 Reasoning"}
-                    {filterKey === "fast" && "⚡ Fast"}
-                    {filterKey === "local" && "🖥️ Local"}
+                    {filterKey === "vision" && "Vision"}
+                    {filterKey === "reasoning" && "Reasoning"}
+                    {filterKey === "fast" && "Fast"}
+                    {filterKey === "local" && "Ollama"}
                   </button>
                 ))}
               </div>
@@ -324,7 +327,7 @@ export function Header({
                         </div>
                         <div className="provider-model-list">
                           {p.filteredModels.map((m) => {
-                            const unavailable = !p.working || m.chat_compatible === false || !!m.supports_image_generation;
+                            const unavailable = !p.working || (m.chat_compatible === false && !m.supports_image_generation);
                             const isCurrentActive = !isAuto && provider === p.id && model === m.id;
                             return (
                               <div

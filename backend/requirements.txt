@@ -5,3 +5,5 @@ python-dotenv>=1,<2
 pytest>=8,<10
 python-multipart>=0.0.18
 pypdf>=5.0.0
+
+Pillow>=11.3,<13
