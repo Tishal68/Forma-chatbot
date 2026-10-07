@@ -51,9 +51,19 @@ class Settings:
 
     @property
     def ATTACHMENTS_DIR(self) -> Path:
-        dir_path = Path(os.getenv('ATTACHMENTS_DIR', 'data/attachments'))
-        if not dir_path.is_absolute():
-            dir_path = ROOT / dir_path
+        dir_env = os.getenv('ATTACHMENTS_DIR')
+        if dir_env:
+            dir_path = Path(dir_env)
+            if not dir_path.is_absolute():
+                dir_path = ROOT / dir_path
+        elif self.is_production:
+            db_env = os.getenv('DATABASE_PATH')
+            if db_env:
+                dir_path = Path(db_env).resolve().parent / 'attachments'
+            else:
+                dir_path = Path('/var/data/attachments')
+        else:
+            dir_path = ROOT / 'data' / 'attachments'
         dir_path.mkdir(parents=True, exist_ok=True)
         return dir_path
 

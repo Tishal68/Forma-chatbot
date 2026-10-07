@@ -1,7 +1,7 @@
 import React from "react";
 import {
+  ChevronsLeft,
   MessageSquare,
-  PanelLeftClose,
   Pencil,
   Plus,
   Search,
@@ -59,9 +59,6 @@ export function Sidebar({
   onOpenChat,
   onRenameChat,
   onDeleteChat,
-  connected,
-  checking,
-  ready,
   onOpenSettings,
 }: SidebarProps) {
   const dateGroups = ["Today", "Yesterday", "Previous 7 days", "Older"];
@@ -81,32 +78,39 @@ export function Sidebar({
         aria-label="Conversation navigation"
       >
         <div className="brand">
-          <span className="brand-mark">F</span>
-          <span>
+          <div className="brand-logo">
             forma<span className="brand-dot">.</span>
-          </span>
+          </div>
           <button
             className="icon-button collapse"
             aria-label="Collapse sidebar"
             onClick={onClose}
+            title="Collapse sidebar"
           >
-            <PanelLeftClose size={18} />
+            <ChevronsLeft size={18} />
           </button>
         </div>
 
-        <button className="new-chat" onClick={onNewChat} disabled={busy}>
-          <Plus size={18} /> New chat <span title="Ctrl + Shift + O">↗</span>
+        <button
+          className="new-chat"
+          onClick={onNewChat}
+          disabled={busy}
+          aria-label="Start new chat"
+          title="New chat"
+        >
+          <Plus size={18} />
+          <span>New chat</span>
         </button>
 
         <label className="search">
-          <Search size={16} />
+          <Search size={15} />
           <input
             aria-label="Search conversations"
-            placeholder={chats.length > 0 ? `Search ${chats.length} conversations…` : "Search conversations…"}
+            placeholder="Search chats…"
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
           />
-          {search ? (
+          {search && (
             <button
               className="clear-search"
               aria-label="Clear search"
@@ -114,33 +118,25 @@ export function Sidebar({
             >
               <X size={14} />
             </button>
-          ) : chats.length > 0 ? (
-            <span className="chat-count-tag" title={`${chats.length} saved chats`}>
-              {chats.length}
-            </span>
-          ) : null}
+          )}
         </label>
 
-        <nav className="history">
+        <nav className="history" aria-label="Conversation history">
           {chats.length === 0 ? (
             <div className="history-empty">
-              <MessageSquare size={21} />
-              <p>
-                {search
-                  ? "No conversations found"
-                  : "Your conversations, organized."}
-              </p>
+              <MessageSquare size={20} />
+              <p>{search ? "No conversations found" : "No chats yet"}</p>
               <small>
                 {search
                   ? "Try a different search."
-                  : "Start a chat. We’ll save it here automatically."}
+                  : "Your conversations will be saved here."}
               </small>
             </div>
           ) : (
             dateGroups.map((label) => {
               const rows = chats.filter((c) => groupDate(c.updated_at) === label);
               return rows.length ? (
-                <section key={label}>
+                <section key={label} className="history-group">
                   <h2>{label}</h2>
                   {rows.map((c) => (
                     <div
@@ -153,8 +149,8 @@ export function Sidebar({
                         className="chat-link"
                         disabled={busy}
                         onClick={() => onOpenChat(c)}
+                        title={c.title}
                       >
-                        <MessageSquare size={15} />
                         <span>{c.title}</span>
                       </button>
                       <div className="chat-controls">
@@ -183,13 +179,14 @@ export function Sidebar({
         </nav>
 
         <div className="sidebar-footer">
-          <button className="settings-button" onClick={onOpenSettings} title="Settings, guide & diagnostics">
-            <Settings size={17} />
+          <button
+            className="settings-button"
+            onClick={onOpenSettings}
+            title="Settings & guide"
+            aria-label="Settings"
+          >
+            <Settings size={16} />
             <span>Settings</span>
-            <span
-              className={connected && ready ? "connection-dot" : "connection-dot offline"}
-              title={ready ? "Connected & Ready" : "Setup needed"}
-            />
           </button>
         </div>
       </aside>

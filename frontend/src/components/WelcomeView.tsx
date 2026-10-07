@@ -1,109 +1,106 @@
-import React, { useState } from "react";
-import {
-  BookOpen,
-  Code2,
-  FileText,
-  Globe,
-  Lightbulb,
-  PenLine,
-  ShieldCheck,
-  Sparkles,
-} from "lucide-react";
-
-interface SuggestionItem {
-  icon: React.ElementType;
-  title: string;
-  detail: string;
-  prompt: string;
-  tag: string;
-  webSearch?: boolean;
-}
-
-const defaultSuggestions: SuggestionItem[] = [
-  {
-    icon: Code2,
-    title: "Write & debug code",
-    detail: "Build something clean in Python, TS, Rust or Go",
-    prompt: "Write a high-performance Python function with type hints and docstrings. Ask me what it should do.",
-    tag: "Coding",
-  },
-  {
-    icon: Globe,
-    title: "Search the live web",
-    detail: "Get up-to-date facts and cited sources",
-    prompt: "What are the latest developments in AI models and technology this year?",
-    tag: "Web Search",
-    webSearch: true,
-  },
-  {
-    icon: Sparkles,
-    title: "Step-by-step reasoning",
-    detail: "Tackle hard math, logic, and systems problems",
-    prompt: "Walk me step-by-step through solving a complex analytical problem. Ask what challenge I have.",
-    tag: "Reasoning",
-  },
-  {
-    icon: FileText,
-    title: "Analyze documents & data",
-    detail: "Extract insights from PDFs, CSVs, DOCX, or code",
-    prompt: "I want to analyze a document or data file with you. Ask me what to look for.",
-    tag: "Documents",
-  },
-  {
-    icon: PenLine,
-    title: "Draft clear writing",
-    detail: "Turn rough thoughts into engaging drafts",
-    prompt: "Help me write a concise, compelling document. Ask about my target audience and main message.",
-    tag: "Writing",
-  },
-  {
-    icon: Lightbulb,
-    title: "Brainstorm architecture",
-    detail: "Explore trade-offs, schemas, and clean design",
-    prompt: "Brainstorm software architecture with me. Ask what requirements and scale we need to design for.",
-    tag: "Design",
-  },
-];
+import React from "react";
+import { BookOpen, Code2, PenLine, Image as ImageIcon } from "lucide-react";
 
 interface WelcomeViewProps {
   onSelectPrompt: (prompt: string, autoWebSearch?: boolean) => void;
+  imageSupported?: boolean;
+  onTriggerImageMode?: () => void;
 }
 
-export function WelcomeView({ onSelectPrompt }: WelcomeViewProps) {
-  const [showMore, setShowMore] = useState(false);
+export function WelcomeView({
+  onSelectPrompt,
+  imageSupported = true,
+  onTriggerImageMode,
+}: WelcomeViewProps) {
   return (
-    <section className="welcome">
-      <div className="welcome-symbol">✳</div>
-      <div className="eyebrow">YOUR THINKING SPACE</div>
-      <h1>How can I help you today?</h1>
-      <p>Ask a question, work with files, or create something new.</p>
+    <section className="welcome" aria-label="Welcome screen">
+      <div className="welcome-inner">
+        <h1 className="welcome-heading">What can we work on?</h1>
 
-      <div className="suggestions">
-        {defaultSuggestions.slice(0, showMore ? defaultSuggestions.length : 4).map((s) => (
+        <div className="welcome-suggestions-grid">
           <button
-            key={s.title}
             type="button"
-            className="suggestion-card"
-            onClick={() => onSelectPrompt(s.prompt, s.webSearch)}
+            className="suggestion-tile"
+            onClick={() =>
+              onSelectPrompt(
+                "Help me draft and polish a clear, concise piece of writing. Ask what topic to begin with.",
+              )
+            }
+            aria-label="Write: Polish, draft, edit"
           >
-            <div className="suggestion-card-header">
-              <span className="suggestion-icon-wrap">
-                <s.icon size={18} />
-              </span>
-              <span className="suggestion-tag">{s.tag}</span>
+            <div className="suggestion-tile-icon">
+              <PenLine size={18} />
             </div>
-            <strong>{s.title}</strong>
-            <span className="suggestion-detail">{s.detail}</span>
-            <span className="suggestion-arrow" aria-hidden="true">↗</span>
+            <div className="suggestion-tile-content">
+              <span className="suggestion-tile-title">Write</span>
+              <span className="suggestion-tile-desc">Polish, draft, edit</span>
+            </div>
           </button>
-        ))}
-      </div>
 
-      <button type="button" className="welcome-more" aria-expanded={showMore} onClick={() => setShowMore(!showMore)}>
-        {showMore ? "Fewer ideas" : "More ideas"}
-      </button>
-      <div className="privacy-note">
-        <ShieldCheck size={15} /> Chats are saved to this browser’s visitor session.
+          <button
+            type="button"
+            className="suggestion-tile"
+            onClick={() =>
+              onSelectPrompt(
+                "Explain a complex concept to me in simple, intuitive terms. What would you like to explore?",
+              )
+            }
+            aria-label="Learn: Explain anything"
+          >
+            <div className="suggestion-tile-icon">
+              <BookOpen size={18} />
+            </div>
+            <div className="suggestion-tile-content">
+              <span className="suggestion-tile-title">Learn</span>
+              <span className="suggestion-tile-desc">Explain anything</span>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            className="suggestion-tile"
+            onClick={() =>
+              onSelectPrompt(
+                "Write & debug code: Help me write a clean, robust function. Ask what it should do.",
+              )
+            }
+            aria-label="Code (Write some code): Build, debug, solve"
+          >
+            <div className="suggestion-tile-icon">
+              <Code2 size={18} />
+            </div>
+            <div className="suggestion-tile-content">
+              <span className="suggestion-tile-title">Code</span>
+              <span className="suggestion-tile-desc">Build, debug, solve</span>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            className="suggestion-tile"
+            onClick={() => {
+              if (onTriggerImageMode) {
+                onTriggerImageMode();
+              } else {
+                onSelectPrompt("Create an image of: ");
+              }
+            }}
+            aria-label="Create image: Visualize your ideas"
+            title={
+              imageSupported
+                ? "Switch to text-to-image mode"
+                : "Image creation requires a supported image model"
+            }
+          >
+            <div className="suggestion-tile-icon">
+              <ImageIcon size={18} />
+            </div>
+            <div className="suggestion-tile-content">
+              <span className="suggestion-tile-title">Create image</span>
+              <span className="suggestion-tile-desc">Visualize your ideas</span>
+            </div>
+          </button>
+        </div>
       </div>
     </section>
   );

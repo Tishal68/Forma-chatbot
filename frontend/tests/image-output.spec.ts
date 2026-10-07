@@ -33,6 +33,10 @@ for (const width of [1440, 768, 390]) {
       ].map(event=>`data: ${JSON.stringify(event)}\n\n`).join('')});
     });
     await page.goto('/');
+    const toolsBtn = page.getByRole('button', {name: 'Tools'});
+    if (await toolsBtn.isVisible()) {
+      await toolsBtn.click();
+    }
     await page.getByRole('button',{name:'Create image mode'}).click();
     await page.getByRole('textbox',{name:'Message Forma'}).fill('Create a green landscape');
     await page.getByRole('button',{name:'Send message',exact:true}).click();

@@ -14,9 +14,8 @@ import {
   Image as ImageIcon,
   Pencil,
   RotateCcw,
-  Sparkles,
 } from "lucide-react";
-import type { Attachment, Message as MessageType, WebSearchResult } from "../types";
+import type { Attachment, Message as MessageType } from "../types";
 
 function formatBytes(bytes: number): string {
   if (!bytes || isNaN(bytes)) return "0 B";
@@ -28,7 +27,25 @@ function formatBytes(bytes: number): string {
 function getFileIcon(att: Attachment) {
   if (att.is_image) return <ImageIcon size={14} />;
   const ext = att.filename.split(".").pop()?.toLowerCase() || "";
-  if (["py", "js", "ts", "tsx", "jsx", "html", "css", "json", "rs", "go", "c", "cpp", "java", "sql", "sh"].includes(ext)) {
+  if (
+    [
+      "py",
+      "js",
+      "ts",
+      "tsx",
+      "jsx",
+      "html",
+      "css",
+      "json",
+      "rs",
+      "go",
+      "c",
+      "cpp",
+      "java",
+      "sql",
+      "sh",
+    ].includes(ext)
+  ) {
     return <Code2 size={14} />;
   }
   if (["pdf", "docx", "txt", "md", "csv"].includes(ext)) {
@@ -37,31 +54,23 @@ function getFileIcon(att: Attachment) {
   return <File size={14} />;
 }
 
-function formatTime(isoString?: string): string {
-  if (!isoString) return "";
-  try {
-    const d = new Date(isoString);
-    return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  } catch {
-    return "";
-  }
-}
-
 function CopyButton({
   text,
   label = "Copy",
+  showLabel = false,
 }: {
   text: string;
   label?: string;
+  showLabel?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState(false);
 
   return (
     <button
-      title={label}
+      title={failed ? "Failed" : copied ? "Copied" : label}
       aria-label={label}
-      className="action-btn"
+      className={`action-btn ${showLabel ? "" : "icon-btn"}`}
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(text);
@@ -74,7 +83,7 @@ function CopyButton({
       }}
     >
       {copied ? <Check size={13} /> : <Copy size={13} />}
-      <span>{failed ? "Select text to copy" : copied ? "Copied" : label}</span>
+      {showLabel && <span>{failed ? "Failed" : copied ? "Copied" : label}</span>}
     </button>
   );
 }
@@ -100,48 +109,31 @@ export const Message = memo(function Message({
   onEdit: (message: MessageType) => void;
 }) {
   const assistant = message.role === "assistant";
-  const time = formatTime(message.created_at);
+  const rawModelName = message.model
+    ? message.model.split(":").slice(1).join(":")
+    : "";
 
   return (
     <article
       className={`message ${message.role}`}
       aria-label={assistant ? "Assistant response" : "Your message"}
     >
-      <div className="message-heading">
-        <div className="heading-left">
-          <span className={assistant ? "avatar assistant-avatar" : "avatar user-avatar"}>
-            {assistant ? (
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/>
-                <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>
-              </svg>
-            ) : (
-              "U"
-            )}
+      {assistant && (
+        <div className="forma-avatar-wrap">
+          <span className="forma-avatar" aria-hidden="true">
+            f.
           </span>
-          <strong className="author-name">{assistant ? "Forma" : "You"}</strong>
-          {/* Model indicator with Auto routing reason */}
-          {assistant && message.model && (
-            <span
-              className={`message-model-tag ${message.auto_reason ? "auto-selected" : ""}`}
-              title={message.auto_reason || `Model: ${message.model}`}
-            >
-              {message.auto_reason && <Sparkles size={11} className="auto-model-sparkle" />}
-              <span className="message-model-name">
-                {message.model.split(":").slice(1).join(":").replace(/^openai\//, "")}
-              </span>
-              {message.auto_reason && (
-                <span className="message-auto-reason" title={message.auto_reason}> · Auto</span>
-              )}
-            </span>
+        </div>
+      )}
+      <div className="message-content">
+        <div className="message-header">
+          {assistant ? (
+            <strong className="author-name">Forma</strong>
+          ) : (
+            <strong className="author-name user-author-name">You</strong>
           )}
         </div>
-        {time && <span className="message-time">{time}</span>}
-      </div>
 
-      {assistant && message.auto_reason && <details className="routing-note">
-        <summary>Why this model?</summary><p>{message.auto_reason}</p>
-      </details>}
       {/* Render attached files for user messages */}
       {!assistant && message.attachments && message.attachments.length > 0 && (
         <div className="message-attachments-list">
@@ -151,24 +143,41 @@ export const Message = memo(function Message({
               <span className="att-name">{att.filename}</span>
               <span className="att-meta">
                 {formatBytes(att.size_bytes)}
-                {att.page_count && att.page_count > 1 ? ` · ${att.page_count} pages` : ""}
+                {att.page_count && att.page_count > 1
+                  ? ` · ${att.page_count} pages`
+                  : ""}
               </span>
             </div>
           ))}
         </div>
       )}
 
-      {assistant && message.attachments?.filter(a => a.generated && a.is_image).map(att => {
-        const url = `/api/conversations/${encodeURIComponent(att.conversation_id)}/attachments/${encodeURIComponent(att.id)}`;
-        return <figure className="generated-image" key={att.id}>
-          <a href={url} target="_blank" rel="noopener noreferrer" aria-label="Open generated image">
-            <img src={url} alt="AI-generated image" loading="lazy" />
-          </a>
-          <figcaption><span>Generated with {message.model?.split(":").slice(1).join(":")}</span>
-            <a href={`${url}/download`} download={att.filename}>Download image</a>
-          </figcaption>
-        </figure>;
-      })}
+      {/* Generated image if present */}
+      {assistant &&
+        message.attachments
+          ?.filter((a) => a.generated && a.is_image)
+          .map((att) => {
+            const url = `/api/conversations/${encodeURIComponent(att.conversation_id)}/attachments/${encodeURIComponent(att.id)}`;
+            return (
+              <figure className="generated-image" key={att.id}>
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Open generated image"
+                >
+                  <img src={url} alt="AI-generated image" loading="lazy" />
+                </a>
+                <figcaption>
+                  <span>Generated with {rawModelName}</span>
+                  <a href={`${url}/download`} download={att.filename}>
+                    Download image
+                  </a>
+                </figcaption>
+              </figure>
+            );
+          })}
+
       {/* Main markdown content */}
       <div className="message-body">
         <ReactMarkdown
@@ -189,7 +198,7 @@ export const Message = memo(function Message({
                 <div className="code-block">
                   <div className="code-toolbar">
                     <span className="code-lang">{lang || "code"}</span>
-                    <CopyButton text={rawCode} label="Copy code" />
+                    <CopyButton text={rawCode} label="Copy code" showLabel={true} />
                   </div>
                   <div className="code-content">
                     <div className="code-line-numbers" aria-hidden="true">
@@ -211,7 +220,12 @@ export const Message = memo(function Message({
             },
             a({ children, href }) {
               return (
-                <a href={href} target="_blank" rel="noopener noreferrer" className="markdown-link">
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="markdown-link"
+                >
                   {children}
                 </a>
               );
@@ -232,7 +246,9 @@ export const Message = memo(function Message({
           <small className="status-note stopped">Response stopped</small>
         )}
         {assistant && message.status === "error" && (
-          <small className="status-note error">Generation interrupted. You can retry below.</small>
+          <small className="status-note error">
+            Generation interrupted. You can retry below.
+          </small>
         )}
       </div>
 
@@ -271,7 +287,7 @@ export const Message = memo(function Message({
         </details>
       )}
 
-      {/* Message action controls: compact, visible on touch and on hover */}
+      {/* Message action controls below message */}
       <div className="message-actions">
         <CopyButton text={message.content} />
         {!assistant && (
@@ -288,15 +304,57 @@ export const Message = memo(function Message({
         )}
         {assistant && last && !busy && (
           <button
-            className="action-btn"
+            className="action-btn icon-btn"
             onClick={onRegenerate}
-            title={message.status === "error" ? "Retry generation" : "Regenerate response"}
-            aria-label={message.status === "error" ? "Retry generation" : "Regenerate response"}
+            title={
+              message.status === "error"
+                ? "Retry generation"
+                : "Regenerate response"
+            }
+            aria-label={
+              message.status === "error"
+                ? "Retry generation"
+                : "Regenerate response"
+            }
           >
-            <RotateCcw size={13} />
-            <span>{message.status === "error" ? "Retry" : "Regenerate"}</span>
+            <RotateCcw size={14} />
           </button>
         )}
+
+        {/* Model attribution & why this model */}
+        {assistant && message.model && (
+          <div className="message-model-info">
+            {message.auto_reason ? (
+              <details className="routing-note">
+                <summary>
+                  <span className="routing-summary-label">
+                    Auto · {message.auto_reason.replace(/\.*$/, "")}
+                  </span>
+                  <span className="why-link">Why this model?</span>
+                  <span className="message-model-name-badge">
+                    <span className="message-model-name">{rawModelName}</span>
+                  </span>
+                </summary>
+                <div className="routing-explanation">
+                  <p>{message.auto_reason}</p>
+                </div>
+              </details>
+            ) : (
+              <div className="manual-model-info">
+                <span className="message-model-name">{rawModelName}</span>
+                <details className="routing-note manual-note">
+                  <summary>
+                    <span className="why-link">Why this model?</span>
+                  </summary>
+                  <div className="routing-explanation">
+                    <p>Manually chosen model ({rawModelName}).</p>
+                  </div>
+                </details>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
       </div>
     </article>
   );

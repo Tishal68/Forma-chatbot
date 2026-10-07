@@ -2,17 +2,12 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
   Check,
   ChevronDown,
-  Download,
   Eye,
-  FileText,
-  Globe,
-  Moon,
+  Menu,
   PanelLeft,
   Pencil,
-  Plus,
   Search,
   Sparkles,
-  Sun,
   X,
   Zap,
 } from "lucide-react";
@@ -159,15 +154,16 @@ export function Header({
       <div className="header-left">
         {!sidebar && (
           <button
-            className="icon-button"
+            className="icon-button menu-toggle-btn"
             aria-label="Open sidebar"
             onClick={onOpenSidebar}
             title="Open conversations sidebar (Ctrl + Shift + O)"
           >
-            <PanelLeft size={20} />
+            <Menu size={20} className="mobile-menu-icon" />
+            <PanelLeft size={18} className="desktop-menu-icon" />
           </button>
         )}
-        <div className="title-group">
+        <div className="title-group desktop-title-group">
           <span className="header-title" title={displayTitle}>
             {displayTitle}
           </span>
@@ -179,10 +175,14 @@ export function Header({
               title="Rename conversation"
               disabled={busy}
             >
-              <Pencil size={14} />
+              <Pencil size={13} />
             </button>
           )}
         </div>
+      </div>
+
+      <div className="mobile-header-brand" aria-hidden="true">
+        forma<span className="brand-dot">.</span>
       </div>
 
       <div className="header-right">
@@ -198,10 +198,7 @@ export function Header({
             aria-label={`Select model: currently ${activeLabel}`}
             title={`Active: ${activeLabel} ${currentProvider ? `(${currentProvider.name})` : ""}`}
           >
-            <span className={ready ? "connection-dot" : "connection-dot offline"} />
-            {isAuto && <Sparkles size={13} className="auto-sparkle-icon" />}
             <span className="selected-model-name">{activeLabel}</span>
-            {isAuto && <span className="auto-pill">Smart</span>}
             <ChevronDown size={14} className="selector-caret" />
           </button>
 
@@ -399,45 +396,6 @@ export function Header({
             </div>
           )}
         </div>
-
-        {/* Quick Export Conversation Button: Useful for saving conversations */}
-        {messagesCount > 0 && onExportChat && (
-          <button
-            type="button"
-            className="icon-button header-export-btn"
-            onClick={onExportChat}
-            disabled={busy}
-            aria-label="Export chat as Markdown"
-            title="Export conversation as Markdown (.md)"
-          >
-            <Download size={17} />
-          </button>
-        )}
-
-        {/* Quick Theme Switcher Button */}
-        {onToggleTheme && (
-          <button
-            type="button"
-            className="icon-button header-theme-btn"
-            onClick={onToggleTheme}
-            aria-label={`Current theme: ${theme}. Click to switch theme.`}
-            title={`Theme: ${theme.toUpperCase()} (Click to toggle)`}
-          >
-            {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
-          </button>
-        )}
-
-        {/* Always Visible New Chat Button */}
-        <button
-          className="header-new"
-          onClick={onNewChat}
-          disabled={busy}
-          aria-label="Start new chat"
-          title="New chat · Ctrl + Shift + O"
-        >
-          <Plus size={16} />
-          <span className="header-new-text">New chat</span>
-        </button>
       </div>
     </header>
   );

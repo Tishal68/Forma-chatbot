@@ -1046,10 +1046,9 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
 
         saved_model_tag = f"{provider}:{model}"
         mid = db.execute(
-            "INSERT INTO messages(conversation_id, role, content, created_at, status, model, auto_reason) VALUES (?, 'assistant', '', ?, 'generating', ?, ?)",
-            (cid, now(), saved_model_tag, auto_explanation or None),
+            "INSERT INTO messages(conversation_id, role, content, created_at, status, model, auto_reason, output_mode) VALUES (?, 'assistant', '', ?, 'generating', ?, ?, ?)",
+            (cid, now(), saved_model_tag, auto_explanation or None, body.output_mode),
         ).lastrowid
-        db.execute('UPDATE messages SET output_mode = ? WHERE id = ?', (body.output_mode, mid))
         db.execute('UPDATE conversations SET updated_at = ? WHERE id = ?', (now(), cid))
 
     queue: asyncio.Queue = asyncio.Queue(maxsize=128)

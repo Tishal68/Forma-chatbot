@@ -2,7 +2,7 @@ import {defineConfig} from '@playwright/test';
 process.env.FORMA_TEST_URL ||= 'http://127.0.0.1:5179';
 export default defineConfig({
   testDir: 'tests',
-  testMatch: ['model-selection.spec.ts', 'image-output.spec.ts'],
+  testMatch: ['model-selection.spec.ts', 'image-output.spec.ts', 'mockup-visual.spec.ts'],
   timeout: 30000,
   workers: 1,
   reporter: 'list',

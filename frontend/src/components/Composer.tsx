@@ -1,13 +1,16 @@
 import React, { useRef, useState, useEffect } from "react";
 import {
   ArrowDown,
+  ArrowUpRight,
+  Check,
+  ChevronDown,
   Code2,
   File,
   FileText,
   Globe,
   Image as ImageIcon,
   Loader2,
-  Paperclip,
+  Plus,
   Send,
   Square,
   X,
@@ -54,19 +57,39 @@ function formatBytes(bytes: number): string {
 }
 
 function getFileIcon(att: Attachment) {
-  if (att.is_image) return <ImageIcon size={15} />;
+  if (att.is_image) return <ImageIcon size={14} />;
   const ext = att.filename.split(".").pop()?.toLowerCase() || "";
-  if (["py", "js", "ts", "tsx", "jsx", "html", "css", "json", "rs", "go", "c", "cpp", "java", "sql", "sh"].includes(ext)) {
-    return <Code2 size={15} />;
+  if (
+    [
+      "py",
+      "js",
+      "ts",
+      "tsx",
+      "jsx",
+      "html",
+      "css",
+      "json",
+      "rs",
+      "go",
+      "c",
+      "cpp",
+      "java",
+      "sql",
+      "sh",
+    ].includes(ext)
+  ) {
+    return <Code2 size={14} />;
   }
   if (["pdf", "docx", "txt", "md", "csv"].includes(ext)) {
-    return <FileText size={15} />;
+    return <FileText size={14} />;
   }
-  return <File size={15} />;
+  return <File size={14} />;
 }
 
 export function Composer({
-  imageMode, imageHint, onToggleImageMode,
+  imageMode,
+  imageHint,
+  onToggleImageMode,
   ready,
   checking,
   connected,
@@ -94,20 +117,52 @@ export function Composer({
   onToggleWebSearch,
 }: ComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const toolsMenuRef = useRef<HTMLDivElement>(null);
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
 
-  // Auto-resize textarea based on content
+  // Auto-resize textarea up to 160px
   useEffect(() => {
     const el = textareaRef.current;
     if (el) {
       el.style.height = "auto";
-      const newHeight = Math.min(el.scrollHeight, 180);
-      el.style.height = `${Math.max(newHeight, 32)}px`;
+      const newHeight = Math.min(el.scrollHeight, 160);
+      el.style.height = `${Math.max(newHeight, 28)}px`;
     }
   }, [input, textareaRef]);
 
+  // Close tools popover when clicking outside or pressing Escape
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        toolsMenuRef.current &&
+        !toolsMenuRef.current.contains(e.target as Node)
+      ) {
+        setToolsOpen(false);
+      }
+    }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape" && toolsOpen) {
+        setToolsOpen(false);
+      }
+    }
+    if (toolsOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("keydown", handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [toolsOpen]);
+
   const hasUploading = attachments.some((a) => a.uploading);
-  const canSend = (input.trim() || attachments.length > 0) && !loading && !busy && ready && !hasUploading;
+  const canSend =
+    (input.trim() || attachments.length > 0) &&
+    !loading &&
+    !busy &&
+    ready &&
+    !hasUploading;
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -167,7 +222,7 @@ export function Composer({
           aria-label="Scroll to bottom"
           onClick={onScrollToBottom}
         >
-          <ArrowDown size={18} />
+          <ArrowDown size={17} />
         </button>
       )}
 
@@ -179,7 +234,7 @@ export function Composer({
             aria-label="Dismiss error"
             onClick={onDismissError}
           >
-            <X size={16} />
+            <X size={15} />
           </button>
         </div>
       )}
@@ -223,7 +278,9 @@ export function Composer({
               <div
                 key={att.id}
                 className={`attachment-chip ${att.uploading ? "uploading" : ""} ${att.error ? "has-error" : ""}`}
-                title={att.error || `${att.filename} (${formatBytes(att.size_bytes)})`}
+                title={
+                  att.error || `${att.filename} (${formatBytes(att.size_bytes)})`
+                }
               >
                 <span className="attachment-icon">{getFileIcon(att)}</span>
                 <span className="attachment-name">{att.filename}</span>
@@ -233,7 +290,7 @@ export function Composer({
                     : formatBytes(att.size_bytes)}
                 </span>
                 {att.uploading ? (
-                  <Loader2 size={13} className="spin-icon" />
+                  <Loader2 size={12} className="spin-icon" />
                 ) : (
                   <button
                     type="button"
@@ -241,7 +298,7 @@ export function Composer({
                     aria-label={`Remove ${att.filename}`}
                     onClick={() => onRemoveAttachment(att.id)}
                   >
-                    <X size={13} />
+                    <X size={12} />
                   </button>
                 )}
               </div>
@@ -249,100 +306,170 @@ export function Composer({
           </div>
         )}
 
-        <textarea
-          ref={textareaRef}
-          aria-label="Message Forma"
-          rows={1}
-          placeholder={imageMode ? "Describe an image to create…" : dragOver ? "Drop files to attach…" : "Message Forma…"}
-          value={input}
-          disabled={loading}
-          onChange={(e) => onInputChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (
-              e.key === "Enter" &&
-              !e.shiftKey &&
-              !e.nativeEvent.isComposing
-            ) {
-              e.preventDefault();
-              if (canSend) onSend();
+        {/* Top row: Auto-growing Textarea */}
+        <div className="composer-top-row">
+          <textarea
+            ref={textareaRef}
+            aria-label="Message Forma"
+            rows={1}
+            placeholder={
+              imageMode
+                ? "Describe an image to create…"
+                : dragOver
+                  ? "Drop files to attach…"
+                  : "Ask Forma anything…"
             }
-          }}
-        />
+            value={input}
+            disabled={loading}
+            onChange={(e) => onInputChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (
+                e.key === "Enter" &&
+                !e.shiftKey &&
+                !e.nativeEvent.isComposing
+              ) {
+                e.preventDefault();
+                if (canSend) onSend();
+              }
+            }}
+          />
+        </div>
 
-        {imageHint && <p className="image-mode-hint" role="status">{imageHint}</p>}
+        {/* Active mode chips row */}
+        {(webSearch || imageMode) && (
+          <div className="active-modes-row">
+            {webSearch && (
+              <button
+                type="button"
+                className="mode-chip"
+                onClick={onToggleWebSearch}
+                title="Web search enabled (click to remove)"
+                aria-label="Web search enabled"
+              >
+                <Globe size={13} />
+                <span>Web search</span>
+                <X size={12} />
+              </button>
+            )}
+            {imageMode && (
+              <button
+                type="button"
+                className="mode-chip"
+                onClick={onToggleImageMode}
+                title="Create image mode enabled (click to remove)"
+                aria-label="Create image mode"
+                aria-pressed="true"
+              >
+                <ImageIcon size={13} />
+                <span>Create image</span>
+                <X size={12} />
+              </button>
+            )}
+          </div>
+        )}
+
+        {imageHint && (
+          <p className="image-mode-hint" role="status">
+            {imageHint}
+          </p>
+        )}
+
+        {/* Bottom row: Tools & Send */}
         <div className="composer-bottom">
           <div className="composer-tools">
-            <button type="button" className={`tool-button ${imageMode ? "active" : ""}`}
-              disabled={busy} aria-label="Create image mode" aria-pressed={imageMode} onClick={onToggleImageMode} title="Create an image">
-              <ImageIcon size={17}/><span className="tool-label">Create image</span>
-            </button>
             <button
               type="button"
-              className={`tool-button ${attachments.length > 0 ? "has-files" : ""}`}
+              className="composer-btn attach-btn"
               aria-label="Attach files (PDF, DOCX, CSV, TXT, Code, Images)"
-              title="Attach files (PDF, DOCX, CSV, TXT, Code, Images)"
+              title="Attach files"
               disabled={busy || imageMode}
               onClick={() => fileInputRef.current?.click()}
             >
-              <Paperclip size={17} />
-              <span className="tool-label">Attach</span>
-              {attachments.length > 0 && (
-                <span className="tool-badge">{attachments.length}</span>
-              )}
+              <Plus size={18} />
             </button>
 
-            <button
-              type="button"
-              className={`tool-button web-search-toggle ${webSearch ? "active" : ""}`}
-              aria-label={webSearch ? "Web search: Enabled (Click to disable)" : "Web search: Disabled (Click to enable)"}
-              title={webSearch ? "Web search: ON (Real internet search enabled)" : "Web search: OFF (Click to search real-time web)"}
-              disabled={busy || imageMode}
-              onClick={onToggleWebSearch}
-            >
-              <Globe size={17} />
-              <span className="tool-label">{webSearch ? "Search ON" : "Search"}</span>
-              {webSearch && <span className="active-dot" />}
-            </button>
+            {/* Tools Menu Dropdown */}
+            <div className="tools-dropdown" ref={toolsMenuRef}>
+              <button
+                type="button"
+                className={`composer-btn tools-trigger ${toolsOpen ? "active" : ""}`}
+                aria-label="Tools"
+                aria-expanded={toolsOpen}
+                onClick={() => setToolsOpen((prev) => !prev)}
+                disabled={busy}
+                title="Tools"
+              >
+                <span>Tools</span>
+                <ChevronDown size={14} className="tools-caret" />
+              </button>
+
+              {toolsOpen && (
+                <div className="tools-menu-popover">
+                  <button
+                    type="button"
+                    className={`tools-menu-item ${webSearch ? "selected" : ""}`}
+                    disabled={imageMode}
+                    onClick={() => {
+                      onToggleWebSearch();
+                      setToolsOpen(false);
+                    }}
+                    aria-label="Web search"
+                  >
+                    <Globe size={15} />
+                    <div className="tools-menu-info">
+                      <strong>Web search</strong>
+                      <span>Search real-time web sources</span>
+                    </div>
+                    {webSearch && <Check size={14} className="tools-check" />}
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`tools-menu-item ${imageMode ? "selected" : ""}`}
+                    disabled={attachments.length > 0}
+                    onClick={() => {
+                      onToggleImageMode();
+                      setToolsOpen(false);
+                    }}
+                    aria-label="Create image mode"
+                    aria-pressed={imageMode}
+                  >
+                    <ImageIcon size={15} />
+                    <div className="tools-menu-info">
+                      <strong>Create image</strong>
+                      <span>Visualize ideas with AI</span>
+                    </div>
+                    {imageMode && <Check size={14} className="tools-check" />}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="composer-actions">
-            {input.trim().length > 0 && !busy && (
-              <button
-                type="button"
-                className="clear-input-btn"
-                onClick={() => onInputChange("")}
-                title="Clear prompt"
-                aria-label="Clear prompt"
-              >
-                <X size={14} />
-              </button>
-            )}
-
-            <span className="send-hint">
-              Enter ↵
-            </span>
-
             {busy ? (
               <button
                 type="button"
-                className="send stop"
+                className="send-action-btn stop-action-btn"
                 onClick={onStop}
                 title="Stop generation"
                 aria-label="Stop generation"
               >
                 <Square size={14} fill="currentColor" />
-                <span>Stop</span>
               </button>
             ) : (
               <button
                 type="submit"
-                className={`send primary-send ${canSend ? "can-send" : ""}`}
+                className={`send-action-btn submit-action-btn ${canSend ? "can-send" : ""}`}
                 disabled={!canSend}
-                title={canSend ? "Send message (Enter)" : "Type a message or attach a file to send"}
+                title={
+                  canSend
+                    ? "Send message (Enter)"
+                    : "Type a message or attach files"
+                }
                 aria-label="Send message"
               >
-                <Send size={15} />
-                <span>Send</span>
+                <ArrowUpRight size={18} strokeWidth={2.4} />
               </button>
             )}
           </div>
@@ -350,8 +477,7 @@ export function Composer({
       </form>
 
       <p className="composer-caption">
-        <span>AI can make mistakes. Verify important information.</span>
-        <span>Shift + Enter for new line</span>
+        Forma can make mistakes. Check important information.
       </p>
     </div>
   );

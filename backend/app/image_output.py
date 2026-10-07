@@ -11,7 +11,19 @@ import io
 import json
 import uuid
 import warnings
-from PIL import Image, UnidentifiedImageError
+try:
+    from PIL import Image, UnidentifiedImageError
+    DecompressionBombWarning = Image.DecompressionBombWarning
+    DecompressionBombError = Image.DecompressionBombError
+except ImportError:
+    Image = None
+    class UnidentifiedImageError(Exception):
+        pass
+    class DecompressionBombWarning(Warning):
+        pass
+    class DecompressionBombError(Exception):
+        pass
+
 from .config import settings
 from .database import connect
 
@@ -20,6 +32,8 @@ MAX_RESPONSE_BYTES = 32 * 1024 * 1024
 
 
 def decode_image(encoded):
+    if Image is None:
+        raise ValueError('Image processing library (Pillow) is not available on this server.')
     if not isinstance(encoded, str) or len(encoded) > MAX_RESPONSE_BYTES:
         raise ValueError('The generated image exceeds the supported size.')
     try:
@@ -27,7 +41,7 @@ def decode_image(encoded):
         if len(data) > MAX_IMAGE_BYTES:
             raise ValueError('The generated image is too large.')
         with warnings.catch_warnings():
-            warnings.simplefilter('error', Image.DecompressionBombWarning)
+            warnings.simplefilter('error', DecompressionBombWarning)
             with Image.open(io.BytesIO(data)) as picture:
                 if picture.format not in ('PNG', 'JPEG', 'WEBP'):
                     raise ValueError('The provider returned an unsupported image format. Choose a raster image model.')
@@ -36,7 +50,7 @@ def decode_image(encoded):
                 fmt = picture.format
                 picture.verify()
         return data, {'PNG': ('image/png', 'png'), 'JPEG': ('image/jpeg', 'jpg'), 'WEBP': ('image/webp', 'webp')}[fmt]
-    except (binascii.Error, UnidentifiedImageError, OSError, Image.DecompressionBombWarning, Image.DecompressionBombError) as exc:
+    except (binascii.Error, UnidentifiedImageError, OSError, DecompressionBombWarning, DecompressionBombError) as exc:
         raise ValueError('The provider returned invalid image data. Please retry.') from exc
 
 
@@ -55,6 +69,8 @@ async def ndjson(response):
 
 
 async def generate_image(client, provider, model, prompt, notify):
+    if Image is None:
+        raise ValueError('Image processing library (Pillow) is not available on this server.')
     async with asyncio.timeout(settings.GENERATION_TIMEOUT):
         if provider == 'ollama':
             encoded, complete = None, False

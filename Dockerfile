@@ -7,12 +7,12 @@ RUN npm run build
 
 FROM python:3.12-slim-bookworm AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PORT=8000 APP_ENV=production DATABASE_PATH=/var/data/chat.db \
-    OLLAMA_BASE_URL=http://localhost:11434
+    ATTACHMENTS_DIR=/var/data/attachments OLLAMA_BASE_URL=http://localhost:11434
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends gosu && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10001 forma && useradd --uid 10001 --gid forma --no-create-home forma \
-    && mkdir -p /var/data && chown forma:forma /var/data
-COPY backend/requirements-lock.txt ./backend/requirements-lock.txt
+    && mkdir -p /var/data/attachments && chown -R forma:forma /var/data
+COPY backend/requirements-lock.txt backend/requirements.txt ./backend/
 RUN pip install --no-cache-dir -r backend/requirements-lock.txt
 COPY backend/app ./backend/app
 COPY --from=frontend /build/dist ./frontend/dist

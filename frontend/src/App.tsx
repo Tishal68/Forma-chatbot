@@ -78,7 +78,7 @@ export function App() {
   );
 
   const [theme, setTheme] = useState(
-    safeStorage.getItem("forma-theme") || "system",
+    safeStorage.getItem("forma-theme") || "dark",
   );
   const [temperature, setTemperature] = useState(() => {
     const saved = safeStorage.getItem("forma-temperature");

@@ -11,6 +11,7 @@ httpx==0.28.1
 idna==3.20
 iniconfig==2.3.0
 packaging==26.3
+Pillow==11.3.0
 pluggy==1.6.0
 pydantic==2.13.5
 pydantic_core==2.46.5

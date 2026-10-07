@@ -40,7 +40,8 @@ def initialize():
           status TEXT NOT NULL DEFAULT 'complete', model TEXT,
           sources TEXT,
           web_search INTEGER DEFAULT 0,
-          auto_reason TEXT);
+          auto_reason TEXT,
+          output_mode TEXT NOT NULL DEFAULT 'chat');
 
         CREATE INDEX IF NOT EXISTS messages_conversation ON messages(conversation_id, id);
 
@@ -55,7 +56,8 @@ def initialize():
           created_at TEXT NOT NULL,
           extracted_text TEXT,
           page_count INTEGER DEFAULT 0,
-          is_image INTEGER DEFAULT 0);
+          is_image INTEGER DEFAULT 0,
+          generated INTEGER NOT NULL DEFAULT 0);
 
         CREATE INDEX IF NOT EXISTS attachments_conv ON attachments(conversation_id);
         CREATE INDEX IF NOT EXISTS attachments_msg ON attachments(message_id);
