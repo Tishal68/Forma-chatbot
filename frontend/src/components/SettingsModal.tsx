@@ -77,7 +77,7 @@ export function SettingsModal({
       <div className="modal-header">
         <div>
           <h2>Settings</h2>
-          <p>Manage model behavior, privacy, and preferences.</p>
+          <p>Make Forma yours. Manage your experience, models, and data.</p>
         </div>
         <button
           className="icon-button"
@@ -88,12 +88,13 @@ export function SettingsModal({
         </button>
       </div>
 
+      <div className="settings-layout">
       {/* Settings Navigation Tabs */}
       <div className="settings-tabs" role="tablist">
         <button type="button" role="tab" aria-selected={activeTab === "personalization"}
           className={`settings-tab ${activeTab === "personalization" ? "active" : ""}`}
           onClick={() => setActiveTab("personalization")}>
-          <Sparkles size={15} /><span>Personalization</span>
+          <Sparkles size={15} /><span>Chat & Memory</span>
         </button>
         <button
           type="button"
@@ -113,7 +114,7 @@ export function SettingsModal({
           onClick={() => setActiveTab("providers")}
         >
           <Sparkles size={15} />
-          <span>Providers & Diagnostics</span>
+          <span>Models & Diagnostics</span>
         </button>
         <button
           type="button"
@@ -123,7 +124,7 @@ export function SettingsModal({
           onClick={() => setActiveTab("guide")}
         >
           <BookOpen size={15} />
-          <span>Quick Guide</span>
+          <span>Guide</span>
         </button>
         <button
           type="button"
@@ -133,11 +134,12 @@ export function SettingsModal({
           onClick={() => setActiveTab("privacy")}
         >
           <Lock size={15} />
-          <span>Privacy & Data</span>
+          <span>Data & Privacy</span>
         </button>
       </div>
 
       <div className="settings-tab-content">
+        <h3 className="settings-panel-heading">{({general:"General", personalization:"Chat & Memory", providers:"Models & Diagnostics", guide:"How to use Forma", privacy:"Data & Privacy"} as const)[activeTab]}</h3>
         {open && activeTab === "personalization" && <PersonalizationSettings />}
         {/* Tab 1: General */}
         {activeTab === "general" && (
@@ -303,6 +305,7 @@ export function SettingsModal({
             </div>
           </div>
         )}
+      </div>
       </div>
     </dialog>
   );
