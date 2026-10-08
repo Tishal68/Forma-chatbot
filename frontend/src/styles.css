@@ -2501,10 +2501,17 @@ main {position:relative;isolation:isolate;background:
 
 /* Mobile drawer must stay above its scrim; model menu must fit in viewport. */
 @media(max-width:800px) {
-  .sidebar {z-index:60;}
+  .sidebar {position:fixed;inset:0 auto 0 0;z-index:60;}
   .sidebar-model-slot .unified-menu {
     position:fixed;top:235px;left:12px;right:12px;width:calc(100vw - 24px);
-    max-height:min(65dvh,510px);z-index:85;
+    max-height:min(calc(100dvh - 247px),510px);z-index:85;
   }
   .sidebar-model-slot .unified-selector-btn {max-width:100%;}
 }
+
+/* Model options retain native keyboard and disabled behavior. */
+button.unified-menu-item {width:100%;font:inherit;color:inherit;text-align:left;border:0;background:transparent;}
+button.unified-menu-item:focus-visible {outline:2px solid var(--accent);outline-offset:-2px;}
+.welcome {min-height:100%;}
+
+.mobile-header-brand .forma-symbol {width:24px;height:24px;vertical-align:middle;margin-right:6px;}

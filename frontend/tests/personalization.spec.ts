@@ -10,7 +10,7 @@ async function appMocks(page: Page) {
 
 async function openPersonalization(page: Page) {
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('tab', { name: 'Personalization', exact: true }).click();
+  await page.getByRole('button', { name: /^Chat & Memory/ }).click();
 }
 
 test('personalization persists, edits memories, disables and clears with confirmation', async ({ page }) => {

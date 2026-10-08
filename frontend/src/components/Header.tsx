@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
+import { FormaMark } from "./FormaMark";
 import { createPortal } from "react-dom";
 import {
   Check,
@@ -89,6 +90,8 @@ export function Header({
     }
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape" && dropdownOpen) {
+        e.preventDefault();
+        e.stopPropagation();
         setDropdownOpen(false);
         triggerRef.current?.focus();
       }
@@ -160,6 +163,7 @@ export function Header({
             className={`unified-selector-btn ${dropdownOpen ? "open" : ""}`}
             onClick={() => !busy && setDropdownOpen((prev) => !prev)}
             disabled={busy}
+            aria-haspopup="menu"
             aria-expanded={dropdownOpen}
             aria-label={`Select model: currently ${activeLabel}`}
             title={`Active: ${activeLabel} ${currentProvider ? `(${currentProvider.name})` : ""}`}
@@ -176,6 +180,7 @@ export function Header({
                 <input
                   ref={searchInputRef}
                   type="text"
+                  aria-label="Filter models or providers"
                   placeholder="Filter models or providers…"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -228,7 +233,7 @@ export function Header({
               {/* Option: Auto Smart Routing (shown when no specific search query or matching 'auto') */}
               {(!searchQuery || "auto smart routing".includes(searchQuery.toLowerCase())) && activeFilter === "all" && !taskFilter && (
                 <>
-                  <div
+                  <button type="button"
                     className={`unified-menu-item auto-item ${isAuto ? "active" : ""}`}
                     role="menuitem"
                     tabIndex={0}
@@ -241,17 +246,7 @@ export function Header({
                       }
                       setDropdownOpen(false);
                     }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        if (onSelectModel) {
-                          onSelectModel("auto", "auto");
-                        } else {
-                          onProviderChange("auto");
-                          onModelChange("auto");
-                        }
-                        setDropdownOpen(false);
-                      }
-                    }}
+
                   >
                     <div className="menu-item-left">
                       <div className="menu-item-title">
@@ -264,7 +259,7 @@ export function Header({
                       </div>
                     </div>
                     {isAuto && <Check size={16} className="active-check" />}
-                  </div>
+                  </button>
 
                   <div className="unified-menu-divider" />
                 </>
@@ -293,11 +288,11 @@ export function Header({
                             const unavailable = !p.working || (m.chat_compatible === false && !m.supports_image_generation);
                             const isCurrentActive = !isAuto && provider === p.id && model === m.id;
                             return (
-                              <div
+                              <button type="button"
                                 key={m.id}
                                 className={`unified-menu-item model-item ${isCurrentActive ? "active" : ""}`}
                                 role="menuitem"
-                                tabIndex={unavailable ? -1 : 0}
+                                disabled={unavailable}
                                 aria-disabled={unavailable}
                                 onClick={() => {
                                   if (unavailable) return;
@@ -309,18 +304,7 @@ export function Header({
                                   }
                                   setDropdownOpen(false);
                                 }}
-                                onKeyDown={(e) => {
-                                  if (unavailable) return;
-                                  if (e.key === "Enter" || e.key === " ") {
-                                    if (onSelectModel) {
-                                      onSelectModel(p.id, m.id);
-                                    } else {
-                                      onProviderChange(p.id);
-                                      onModelChange(m.id);
-                                    }
-                                    setDropdownOpen(false);
-                                  }
-                                }}
+
                               >
                                 <div className="menu-item-left">
                                   <div className="menu-item-title">
@@ -350,7 +334,7 @@ export function Header({
                                   )}
                                 </div>
                                 {isCurrentActive && <Check size={16} className="active-check" />}
-                              </div>
+                              </button>
                             );
                           })}
                         </div>
@@ -398,7 +382,7 @@ export function Header({
       </div>
 
       <div className="mobile-header-brand" aria-hidden="true">
-        forma<span className="brand-dot">.</span>
+        <FormaMark />forma<span className="brand-dot">.</span>
       </div>
 
       <div className="header-right">

@@ -1,4 +1,5 @@
 import React from "react";
+import { FormaMark } from "./FormaMark";
 import {
   ChevronsLeft,
   MessageSquare,
@@ -79,11 +80,7 @@ export function Sidebar({
       >
         <div className="brand">
           <div className="brand-logo">
-            <svg className="forma-symbol" viewBox="0 0 48 48" fill="none" aria-hidden="true">
-              <defs><linearGradient id="forma-brand-gradient" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse"><stop stopColor="#B66BFF"/><stop offset=".52" stopColor="#618BFF"/><stop offset="1" stopColor="#23D2E5"/></linearGradient></defs>
-              <path d="M11 38V14C11 10.7 13.7 8 17 8H37" stroke="url(#forma-brand-gradient)" strokeWidth="8" strokeLinecap="round"/>
-              <path d="M11 24H29" stroke="url(#forma-brand-gradient)" strokeWidth="8" strokeLinecap="round"/>
-            </svg>
+            <FormaMark />
             <span>forma<span className="brand-dot">.</span></span>
           </div>
           <button
@@ -108,7 +105,7 @@ export function Sidebar({
         </button>
 
         <div className="sidebar-search-row">
-        <label className="search">
+        <div className="search">
           <Search size={15} />
           <input
             aria-label="Search conversations"
@@ -125,7 +122,7 @@ export function Sidebar({
               <X size={14} />
             </button>
           )}
-        </label>
+        </div>
           <div className="sidebar-model-slot" id="sidebar-model-selector" aria-label="Model selection" />
         </div>
 
