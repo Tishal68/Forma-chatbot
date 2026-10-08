@@ -31,6 +31,7 @@ interface SettingsModalProps {
   models: string[];
   modelDetails: ModelDetail[];
   onModelChange: (model: string) => void;
+  onSelectModel: (provider: string, model: string) => void;
   busy: boolean;
   onRefreshModels: () => void;
   temperature: number;
@@ -53,7 +54,7 @@ function storedChoice(key: string, allowed: string[], fallback: string): string 
 export function SettingsModal({
   open, onClose, theme, onThemeChange, provider, providers, model, busy,
   onRefreshModels, temperature, onTemperatureChange, onClearAll,
-  webSearch, onWebSearchChange, imageMode,
+  webSearch, onWebSearchChange, imageMode, onSelectModel,
 }: SettingsModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [activeTab, setActiveTab] = useState<Tab>("general");
@@ -157,7 +158,23 @@ export function SettingsModal({
                   <div><h4>Model selection</h4><p>Currently selected: <strong>{provider === "auto" || model === "auto" ? "Auto" : model}</strong></p></div>
                   <Sparkles size={19} aria-hidden="true" />
                 </div>
-                <p>Choose a model with the sidebar selector. Unavailable providers are shown below for troubleshooting.</p>
+                <label className="setting">
+                  <span>Selected model</span>
+                  <select aria-label="Selected model" disabled={busy}
+                    value={provider === "auto" || model === "auto" ? "auto" : JSON.stringify([provider, model])}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      const [nextProvider, nextModel] = value === "auto" ? ["auto", "auto"] : JSON.parse(value);
+                      onSelectModel(nextProvider, nextModel);
+                    }}>
+                    <option value="auto">Auto (per-message selection)</option>
+                    {providers.map((p) => <optgroup key={p.id} label={p.name}>
+                      {(p.models || []).map((m) => <option key={m.id} value={JSON.stringify([p.id, m.id])}
+                        disabled={!p.working || (m.chat_compatible === false && !m.supports_image_generation)}>{m.name}</option>)}
+                    </optgroup>)}
+                  </select>
+                </label>
+                <p>Unavailable providers are shown below for troubleshooting.</p>
               </div>
               <div className="providers-list-container">
                 {providers.map((p) => (
@@ -188,9 +205,9 @@ export function SettingsModal({
             <div className="tab-pane">
               <div className="settings-panel-card settings-tool-row">
                 <Globe size={19} aria-hidden="true" />
-                <div><h4>Web search</h4><p>Use internet search for responses when enabled. Forma may also search automatically for changing facts.</p></div>
+                <div><h4>Web search</h4><p>Use internet search for responses when enabled. Forma may also search automatically for changing facts. {imageMode && "Turn off image mode to enable web search."}</p></div>
                 <label className="settings-switch">
-                  <input type="checkbox" aria-label="Enable web search for next messages" checked={webSearch}
+                  <input type="checkbox" aria-label="Enable web search for next messages" checked={webSearch} disabled={imageMode || busy}
                     onChange={(e) => onWebSearchChange(e.target.checked)} />
                   <span aria-hidden="true" />
                 </label>

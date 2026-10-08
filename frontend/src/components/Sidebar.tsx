@@ -105,7 +105,7 @@ export function Sidebar({
         </button>
 
         <div className="sidebar-search-row">
-        <label className="search">
+        <div className="search">
           <Search size={15} />
           <input
             aria-label="Search conversations"
@@ -122,7 +122,7 @@ export function Sidebar({
               <X size={14} />
             </button>
           )}
-        </label>
+        </div>
           <div className="sidebar-model-slot" id="sidebar-model-selector" aria-label="Model selection" />
         </div>
 

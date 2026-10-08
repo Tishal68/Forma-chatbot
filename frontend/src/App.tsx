@@ -735,6 +735,7 @@ export function App() {
             <WelcomeView
               imageSupported={providers.some((p) => !!p.working && !!p.models?.some((m) => !!m.supports_image_generation))}
               onTriggerImageMode={() => {
+                if (attachments.length) { setError("Remove attached files before creating an image."); return; }
                 setOutputMode("image");
                 setWebSearch(false);
                 setInput("");
@@ -832,6 +833,7 @@ export function App() {
         models={models}
         modelDetails={modelDetails}
         onModelChange={setModel}
+        onSelectModel={handleSelectModel}
         busy={busy}
         onRefreshModels={() => loadModels(provider, true)}
         temperature={temperature}
