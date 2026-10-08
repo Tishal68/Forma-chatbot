@@ -2497,3 +2497,14 @@ main {position:relative;isolation:isolate;background:
 @media(prefers-reduced-motion:reduce){
  .settings-switch span::after {transition:none;}
 }
+
+
+/* Mobile drawer must stay above its scrim; model menu must fit in viewport. */
+@media(max-width:800px) {
+  .sidebar {z-index:60;}
+  .sidebar-model-slot .unified-menu {
+    position:fixed;top:235px;left:12px;right:12px;width:calc(100vw - 24px);
+    max-height:min(65dvh,510px);z-index:85;
+  }
+  .sidebar-model-slot .unified-selector-btn {max-width:100%;}
+}
