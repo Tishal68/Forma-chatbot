@@ -115,8 +115,9 @@ def test_vision_model_compatibility(client):
     assert 'does not support vision or image analysis' in chat_res.json()['detail']
 
 
+@pytest.mark.parametrize("question", ["Latest Forma documentation", "who is thalapathy vijay"])
 @pytest.mark.parametrize("explicit_search", [True, False])
-def test_web_search_failure_and_sources(client, monkeypatch, explicit_search):
+def test_web_search_failure_and_sources(client, monkeypatch, explicit_search, question):
     conv_id = client.post('/api/conversations').json()['id']
 
     # Test web search failure
@@ -139,6 +140,10 @@ def test_web_search_failure_and_sources(client, monkeypatch, explicit_search):
 
     # Test web search success
     async def mock_success_search(query, max_results=5):
+        if question == "who is thalapathy vijay":
+            assert "thalapathy vijay current role" in query or "thalapathy vijay latest news" in query
+            if "latest news" in query:
+                raise search.SearchError("News search unavailable")
         return [
             {'title': 'Forma Docs', 'url': 'https://forma.example/docs', 'snippet': 'Forma documentation.'}
         ]
@@ -164,7 +169,7 @@ def test_web_search_failure_and_sources(client, monkeypatch, explicit_search):
 
     success_res = client.post('/api/chat', json={
         'conversation_id': conv_id,
-        'content': 'Latest Forma documentation',
+        'content': question,
         'provider': 'groq',
         'web_search': explicit_search,
     })

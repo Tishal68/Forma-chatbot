@@ -18,7 +18,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Stre
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from .routing import needs_web_search, build_search_query
+from .routing import needs_web_search, build_search_query, biography_subject
 from .config import ROOT, settings
 from .context import build_context, generation_limits
 from .personalization import router as personalization_router, capture_explicit, profile_context
@@ -1000,7 +1000,25 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
             raise HTTPException(status_code=400, detail='Please enter a query for web search.')
 
         try:
-            search_results = await perform_search(search_query, max_results=5)
+            subject = biography_subject(body.content)
+            if subject:
+                news_query = f'{subject} latest news {datetime.now(timezone.utc).date().isoformat()}'
+                searches = await asyncio.gather(
+                    perform_search(search_query, max_results=3),
+                    perform_search(news_query, max_results=3),
+                    return_exceptions=True,
+                )
+                seen_urls = set()
+                for result in searches:
+                    if isinstance(result, list):
+                        for source in result:
+                            if source['url'] not in seen_urls:
+                                seen_urls.add(source['url'])
+                                search_results.append(source)
+                if not search_results:
+                    raise SearchError('Could not verify the current profile or recent news. Please try again.')
+            else:
+                search_results = await perform_search(search_query, max_results=5)
             search_context = format_search_context(search_query, search_results)
         except SearchError as se:
             raise HTTPException(

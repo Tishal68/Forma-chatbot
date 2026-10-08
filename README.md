@@ -11,6 +11,7 @@ It uses React and TypeScript for the frontend, FastAPI for the backend, and SQLi
 - Save preferences and memories in Settings → Personalization.
 - Upload documents and images, and ask follow-up questions about them.
 - Automatically search for current information, or turn on web search for any question.
+- Questions like “Who is Thalapathy Vijay?” check the current role and recent news separately.
 - Edit messages, regenerate replies, and manage chat history.
 - Use light or dark mode on desktop and mobile.
 

@@ -1,5 +1,6 @@
 """Bounded, deterministic task inference. No extra inference request per turn."""
 import re
+from datetime import datetime, timezone
 
 FOLLOWUP = re.compile(
     r'^(?:please\s+)?(?:continue\b|next\b|go on\b|again\b|'
@@ -64,6 +65,17 @@ FRESH_INFO = re.compile(
     r'\b(?:price|cost|schedule|standings|rankings)\b|\bcm\s*(?:of\s*)?tamil\s*nadu\b', re.I)
 
 
+def biography_subject(content: str) -> str | None:
+    match = re.match(r"^(?:please\s+)?(?:who\s+is|who['’]s)\s+(.+?)[?.!]*$", content.strip(), re.I)
+    if not match:
+        return None
+    subject = match.group(1).strip().rstrip('?.!')
+    # A name must come from text, not an inferred identity in an uploaded face.
+    if re.match(r'^(?:he|she|it|this|that|the person|the man|the woman|my|your|our)\b', subject, re.I):
+        return None
+    return subject if subject and len(subject) <= 160 else None
+
+
 def needs_web_search(content: str) -> bool:
     """Search for explicit verification and changing facts, including manual models."""
     text = content.strip()
@@ -79,11 +91,15 @@ def needs_web_search(content: str) -> bool:
         return True
     if re.match(r'^(?:hi|hello|thanks?|thank you|okay|ok|continue|explain (?:it|that|this))\b', text, re.I) and len(text.split()) <= 6:
         return False
-    return bool(FRESH_INFO.search(text))
+    return bool(biography_subject(text) or FRESH_INFO.search(text))
 
 
 def build_search_query(content: str, history: list[dict]) -> str:
     query = content.strip()
+    subject = biography_subject(query)
+    if subject:
+        today = datetime.now(timezone.utc).strftime('%B %Y')
+        return f'{subject} current role {today}'
     verification = re.search(r'\b(?:search|verify|look up|fact[- ]?check)\b', query, re.I)
     reference = re.search(r'\b(?:it|that|this|he|she|they|proper (?:reply|answer)|correct (?:reply|answer))\b', query, re.I)
     if (verification and reference) or is_followup(query):
