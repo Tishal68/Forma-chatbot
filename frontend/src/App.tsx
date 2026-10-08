@@ -815,6 +815,9 @@ export function App() {
         onClose={() => setSettings(false)}
         theme={theme}
         onThemeChange={setTheme}
+        webSearch={webSearch}
+        onWebSearchChange={setWebSearch}
+        imageMode={wantsImage}
         provider={provider}
         providers={providers}
         onProviderChange={handleProviderChange}
