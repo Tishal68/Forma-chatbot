@@ -55,12 +55,12 @@ Forma is an intelligent, reliable, secure, RAG-powered personal AI assistant bui
 
 ### Hybrid RAG System
 - **Semantic Document Chunker**: Chunks uploaded documents (PDF, DOCX, TXT, CSV, Code) into 1,000-character windows with 150-character overlap while preserving line numbers and page markers.
-- **CPU-Friendly Dense Embeddings**: Generates 128-dimensional dense vector embeddings using hashed lexical n-grams and term frequency pooling with zero GPU or heavy torch dependencies.
+- **CPU-Friendly Dense Lexical Vectors**: Generates 128-dimensional dense lexical vectors using deterministic token and character n-gram hashing and term frequency pooling with zero GPU or heavy torch dependencies.
 - **Hybrid Search**: Combines SQLite FTS5 BM25 keyword search with dense cosine vector similarity using Reciprocal Rank Fusion (RRF; $k=60$).
 - **Strict Evidence Boundaries**: Injects context into prompts using `<retrieved_evidence>` boundary tags to prevent context bleeding and prompt injection.
 
 ### Personal AI Tools & Sandboxing
-- **Safe Python Execution Sandbox**: Executes code using a restricted execution environment with strict AST verification (blocking system-level AST nodes), sanitized builtins, memory limits, and a safe import wrapper permitting only standard mathematical/data libraries (`math`, `statistics`, `json`, `re`, `datetime`).
+- **In-Process AST-Restricted Python Sandbox**: Executes code in-process with strict AST syntax verification (blocking system-level imports and dangerous builtins), capturing standard output, and enforcing timeout bounds. Permits only safe mathematical and data utilities (`math`, `statistics`, `json`, `re`, `datetime`, `collections`, `itertools`).
 - **GitHub Repository Inspector**: Inspects public GitHub repositories (`/repos/{owner}/{repo}`) using unauthenticated or authenticated GitHub API requests, retrieving directory trees and README contents safely.
 - **Structured Data Processor**: Parses, cleans, and generates summary statistics for CSV and JSON datasets.
 - **Audit Logging**: Every tool execution is recorded in the `tool_executions` SQLite table with conversation ID, input parameters, execution time, and output summary.

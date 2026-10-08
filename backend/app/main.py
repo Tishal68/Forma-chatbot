@@ -832,6 +832,12 @@ async def delete_attachment(cid: str, aid: str, request: Request):
             raise HTTPException(status_code=404, detail='Attachment not found.')
         db.execute('DELETE FROM attachments WHERE id = ?', (aid,))
 
+    # Clean up any document chunks and FTS index records for this attachment
+    try:
+        delete_attachment_chunks(aid)
+    except Exception as exc:
+        log.warning('Failed to delete chunks for attachment %s: %s', aid, exc)
+
     try:
         p = Path(row['file_path'])
         if p.exists():

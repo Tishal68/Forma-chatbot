@@ -51,7 +51,7 @@ test('settings model selection shares state and appearance persists', async ({pa
   await mockApp(page);
   await page.goto('/');
   await page.getByRole('button', {name: 'Settings', exact: true}).click();
-  await page.getByRole('button', {name: /^Models Providers/}).click();
+  await page.getByRole('button', {name: /^Advanced Models/}).click();
   await page.getByLabel('Selected model', {exact: true}).selectOption(JSON.stringify(['ollama', 'text-model']));
   await page.screenshot({path: 'test-results/settings-models.png'});
   await page.getByRole('button', {name: /^Chat & Memory/}).click();

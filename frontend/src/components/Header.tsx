@@ -168,7 +168,7 @@ export function Header({
             aria-label={`Select model: currently ${activeLabel}`}
             title={`Active: ${activeLabel} ${currentProvider ? `(${currentProvider.name})` : ""}`}
           >
-            <span className="selected-model-name">{activeLabel}</span>
+            <span className="selected-model-name">{isAuto ? "Forma Auto" : activeLabel}</span>
             <ChevronDown size={14} className="selector-caret" />
           </button>
 
@@ -251,11 +251,11 @@ export function Header({
                     <div className="menu-item-left">
                       <div className="menu-item-title">
                         <Sparkles size={14} style={{ color: "var(--accent)" }} />
-                        <strong>Auto (Smart Routing)</strong>
+                        <strong>Forma Auto</strong>
                         <span className="tag-badge default-badge">Recommended</span>
                       </div>
                       <div className="menu-item-desc">
-                        Intelligently chooses the best model for chat, coding, search, documents, or images.
+                        Forma automatically chooses the best available model for your request.
                       </div>
                     </div>
                     {isAuto && <Check size={16} className="active-check" />}

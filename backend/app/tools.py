@@ -4,7 +4,7 @@ Provides safe execution for:
 1. GitHub repository inspection (tree, readme, source files)
 2. Hybrid RAG document search
 3. Live Web search
-4. Safe isolated Python execution (AST safety-checked, restricted sandbox)
+4. In-process AST-restricted Python execution (AST safety-checked, restricted builtins, and timeout)
 5. Structured data processing (CSV/JSON statistics and filtering)
 
 Maintains an audit trail of all executions in the SQLite database.
@@ -111,8 +111,10 @@ class ASTSafetyChecker(ast.NodeVisitor):
 
 def execute_safe_python(code: str, timeout: float = 4.0) -> dict[str, Any]:
     """
-    Safely execute a block of Python code in an isolated environment with AST verification,
-    restricted builtins, output capture, and timeout protection.
+    Execute a block of Python code using in-process AST restricted execution.
+    Inspects syntax with AST visitor, permits only safe standard libraries (math, statistics, etc.),
+    blocks dangerous builtins, captures stdout, and enforces timeout protection.
+    Note: Operates via in-process language restrictions rather than OS-level process/container isolation.
     """
     try:
         tree = ast.parse(code)

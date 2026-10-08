@@ -108,6 +108,12 @@ def initialize():
           content,
           tokenize = 'unicode61');
 
+        CREATE TRIGGER IF NOT EXISTS trg_delete_document_chunks_fts
+        AFTER DELETE ON document_chunks
+        BEGIN
+          DELETE FROM document_chunks_fts WHERE chunk_id = OLD.id;
+        END;
+
         CREATE TABLE IF NOT EXISTS tool_executions (
           id TEXT PRIMARY KEY,
           visitor_id TEXT NOT NULL,

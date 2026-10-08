@@ -2417,8 +2417,14 @@ main {position:relative;isolation:isolate;background:
   -webkit-background-clip:text;background-clip:text;color:transparent;
 }
 .welcome-subtitle {
-  margin:-12px 0 24px;text-align:center;color:var(--text-secondary);
+  margin:-12px 0 8px;text-align:center;color:var(--text-secondary);
   font-size:14px;line-height:1.5;
+}
+.welcome-auto-note {
+  margin: 0 0 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12.5px;
 }
 .welcome-heading {margin-bottom:20px;}
 .suggestion-tile:disabled {cursor:not-allowed;opacity:.5;transform:none;}

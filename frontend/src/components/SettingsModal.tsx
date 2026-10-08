@@ -1,22 +1,19 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  AlertTriangle, BookOpen, CheckCircle2, Cpu, Database, Globe, Image as ImageIcon,
-  Info, Lock, Palette, RefreshCw, Settings, Sliders, Sparkles, Trash2, Wrench, X,
+  AlertTriangle, BookOpen, CheckCircle2, Database, Globe, Image as ImageIcon,
+  Lock, Palette, RefreshCw, Settings, Sliders, Sparkles, Trash2, X,
 } from "lucide-react";
 import { ModelDetail, ProviderInfo } from "../types";
 import { PersonalizationSettings } from "./PersonalizationSettings";
 
-type Tab = "general" | "models" | "memory" | "tools" | "appearance" | "privacy" | "advanced" | "about";
+type Tab = "general" | "memory" | "appearance" | "advanced";
 type Accent = "purple" | "blue" | "teal";
+
 const navigation: { id: Tab; label: string; description: string; Icon: typeof Settings }[] = [
-  { id: "general", label: "General", description: "Shortcuts and preferences", Icon: Settings },
-  { id: "models", label: "Models", description: "Providers and diagnostics", Icon: Cpu },
+  { id: "general", label: "General", description: "Preferences, shortcuts & data", Icon: Settings },
   { id: "memory", label: "Chat & Memory", description: "Personalization and context", Icon: Database },
-  { id: "tools", label: "Tools", description: "Available capabilities", Icon: Wrench },
   { id: "appearance", label: "Appearance", description: "Theme and colours", Icon: Palette },
-  { id: "privacy", label: "Data & Privacy", description: "Your session and data", Icon: Lock },
-  { id: "advanced", label: "Advanced", description: "Generation settings", Icon: Sliders },
-  { id: "about", label: "About", description: "Project information", Icon: Info },
+  { id: "advanced", label: "Advanced", description: "Models, providers & generation", Icon: Sliders },
 ];
 
 interface SettingsModalProps {
@@ -139,8 +136,43 @@ export function SettingsModal({
             <div className="tab-pane">
               <div className="settings-panel-card">
                 <h4>How Forma works</h4>
-                <p>Auto chooses a compatible available model for each message. You can change the model beside your chat search field, or in the header when the sidebar is closed.</p>
+                <p>Forma Auto is the default mode, intelligently selecting the best available model for each request. You can configure manual overrides and provider connections in the Advanced tab.</p>
               </div>
+
+              <div className="settings-panel-card settings-tool-row">
+                <Globe size={19} aria-hidden="true" />
+                <div>
+                  <h4>Web search</h4>
+                  <p>Use internet search for up-to-date information when enabled. Forma may also search automatically for changing facts. {imageMode && "Turn off image mode to enable web search."}</p>
+                </div>
+                <label className="settings-switch">
+                  <input
+                    type="checkbox"
+                    aria-label="Enable web search for next messages"
+                    checked={webSearch}
+                    disabled={imageMode || busy}
+                    onChange={(e) => onWebSearchChange(e.target.checked)}
+                  />
+                  <span aria-hidden="true" />
+                </label>
+              </div>
+
+              <div className="settings-panel-card settings-tool-row">
+                <ImageIcon size={19} aria-hidden="true" />
+                <div>
+                  <h4>Image generation</h4>
+                  <p>{imageMode ? "Image mode is currently active." : "Enable image creation from the composer Tools menu when a supported provider is configured."}</p>
+                </div>
+              </div>
+
+              <div className="settings-panel-card settings-tool-row">
+                <BookOpen size={19} aria-hidden="true" />
+                <div>
+                  <h4>Document & file analysis</h4>
+                  <p>Attach supported documents, code, or images using the + button in the composer for hybrid RAG indexing and reasoning.</p>
+                </div>
+              </div>
+
               <div className="keyboard-shortcuts-box">
                 <h4>Keyboard shortcuts</h4>
                 <div className="shortcut-row"><span>New chat</span><kbd>Ctrl + Shift + O</kbd></div>
@@ -148,123 +180,12 @@ export function SettingsModal({
                 <div className="shortcut-row"><span>Send message</span><kbd>Enter</kbd></div>
                 <div className="shortcut-row"><span>New line</span><kbd>Shift + Enter</kbd></div>
               </div>
-            </div>
-          )}
 
-          {activeTab === "models" && (
-            <div className="tab-pane">
               <div className="settings-panel-card">
-                <div className="settings-status-title">
-                  <div><h4>Model selection</h4><p>Currently selected: <strong>{provider === "auto" || model === "auto" ? "Auto" : model}</strong></p></div>
-                  <Sparkles size={19} aria-hidden="true" />
-                </div>
-                <label className="setting">
-                  <span>Selected model</span>
-                  <select aria-label="Selected model" disabled={busy}
-                    value={provider === "auto" || model === "auto" ? "auto" : JSON.stringify([provider, model])}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      const [nextProvider, nextModel] = value === "auto" ? ["auto", "auto"] : JSON.parse(value);
-                      onSelectModel(nextProvider, nextModel);
-                    }}>
-                    <option value="auto">Auto (per-message selection)</option>
-                    {providers.map((p) => <optgroup key={p.id} label={p.name}>
-                      {(p.models || []).map((m) => <option key={m.id} value={JSON.stringify([p.id, m.id])}
-                        disabled={!p.working || (m.chat_compatible === false && !m.supports_image_generation)}>{m.name}</option>)}
-                    </optgroup>)}
-                  </select>
-                </label>
-                <p>Unavailable providers are shown below for troubleshooting.</p>
+                <h4><Lock size={16} aria-hidden="true" /> Browser session & privacy</h4>
+                <p>Your conversations and preferences are associated with this browser session and do not sync across external devices. Clearing cookies or site data may reset your local session.</p>
               </div>
-              <div className="providers-list-container">
-                {providers.map((p) => (
-                  <div key={p.id} className="provider-status-card">
-                    <div className="provider-card-header">
-                      <div><strong>{p.name}</strong>{p.tagline && <span className="provider-card-tagline"> · {p.tagline}</span>}</div>
-                      {p.working ? <span className="provider-badge-ok"><CheckCircle2 size={13} /> Available</span>
-                        : <span className="provider-badge-error"><AlertTriangle size={13} /> {p.status || "Not configured"}</span>}
-                    </div>
-                    {p.error && <p className="provider-error-detail">{p.error}</p>}
-                    {p.models && p.models.length > 0 && (
-                      <div className="provider-models-chips">
-                        {p.models.map((m) => <span key={m.id} className="model-chip" title={m.description}>{m.name}</span>)}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <button type="button" className="quiet refresh-models" onClick={onRefreshModels} disabled={busy}>
-                <RefreshCw size={15} /> Refresh connections
-              </button>
-            </div>
-          )}
 
-          {activeTab === "memory" && <div className="tab-pane">{open && <PersonalizationSettings />}</div>}
-
-          {activeTab === "tools" && (
-            <div className="tab-pane">
-              <div className="settings-panel-card settings-tool-row">
-                <Globe size={19} aria-hidden="true" />
-                <div><h4>Web search</h4><p>Use internet search for responses when enabled. Forma may also search automatically for changing facts. {imageMode && "Turn off image mode to enable web search."}</p></div>
-                <label className="settings-switch">
-                  <input type="checkbox" aria-label="Enable web search for next messages" checked={webSearch} disabled={imageMode || busy}
-                    onChange={(e) => onWebSearchChange(e.target.checked)} />
-                  <span aria-hidden="true" />
-                </label>
-              </div>
-              <div className="settings-panel-card settings-tool-row">
-                <ImageIcon size={19} aria-hidden="true" />
-                <div><h4>Image generation</h4><p>{imageMode ? "Image mode is currently active." : "Enable image creation from the chat Tools menu when a supported provider is configured."}</p></div>
-              </div>
-              <div className="settings-panel-card settings-tool-row">
-                <BookOpen size={19} aria-hidden="true" />
-                <div><h4>File analysis</h4><p>Attach supported documents or images using the + button in the composer.</p></div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === "appearance" && (
-            <div className="tab-pane">
-              <div className="settings-panel-card">
-                <h4>Theme</h4>
-                <div className="settings-segmented" role="group" aria-label="Theme">
-                  {(["dark", "light", "system"] as const).map((value) =>
-                    <button key={value} type="button" className={theme === value ? "active" : ""}
-                      aria-pressed={theme === value} onClick={() => onThemeChange(value)}>
-                      {value === "dark" ? "Dark" : value === "light" ? "Light" : "System"}
-                    </button>)}
-                </div>
-              </div>
-              <div className="settings-panel-card">
-                <h4>Accent colour</h4>
-                <p>A subtle highlight for buttons, selected items and focus states.</p>
-                <div className="settings-colours" role="group" aria-label="Accent colour">
-                  {(["purple", "blue", "teal"] as const).map((value) => (
-                    <button key={value} type="button" aria-label={value + " accent"}
-                      aria-pressed={accent === value} className={`accent-choice ${value} ${accent === value ? "selected" : ""}`}
-                      onClick={() => setAccent(value)} />
-                  ))}
-                </div>
-              </div>
-              <div className="settings-panel-card settings-preference-row">
-                <div><h4>Compact spacing</h4><p>Fit a little more content on screen.</p></div>
-                <label className="settings-switch"><input type="checkbox" checked={compact}
-                  aria-label="Compact spacing" onChange={(e) => setCompact(e.target.checked)} /><span aria-hidden="true" /></label>
-              </div>
-              <div className="settings-panel-card settings-preference-row">
-                <div><h4>Interface animations</h4><p>Gentle transitions; system reduced-motion setting is always respected.</p></div>
-                <label className="settings-switch"><input type="checkbox" checked={animations}
-                  aria-label="Interface animations" onChange={(e) => setAnimations(e.target.checked)} /><span aria-hidden="true" /></label>
-              </div>
-            </div>
-          )}
-
-          {activeTab === "privacy" && (
-            <div className="tab-pane">
-              <div className="settings-panel-card">
-                <h4><Lock size={16} aria-hidden="true" /> Browser session</h4>
-                <p>Your conversations and preferences are associated with this browser session and do not automatically sync across devices. Clearing cookies or site data may make your previous session inaccessible.</p>
-              </div>
               <div className="danger-zone">
                 <div>
                   <strong>Delete conversations and personalization</strong>
@@ -274,34 +195,189 @@ export function SettingsModal({
                   <Trash2 size={16} /> Delete all data
                 </button>
               </div>
+
+              <div className="settings-panel-card">
+                <h4>About Forma</h4>
+                <p>A personal AI assistant built with React, TypeScript, FastAPI, and SQLite. Designed for privacy, speed, and seamless multi-provider orchestration.</p>
+                <a className="settings-about-link" href="https://github.com/Tishal68/Forma-chatbot" target="_blank" rel="noopener noreferrer">
+                  View project on GitHub
+                </a>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "memory" && (
+            <div className="tab-pane">
+              {open && <PersonalizationSettings />}
+            </div>
+          )}
+
+          {activeTab === "appearance" && (
+            <div className="tab-pane">
+              <div className="settings-panel-card">
+                <h4>Theme</h4>
+                <div className="settings-segmented" role="group" aria-label="Theme">
+                  {(["dark", "light", "system"] as const).map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={theme === value ? "active" : ""}
+                      aria-pressed={theme === value}
+                      onClick={() => onThemeChange(value)}
+                    >
+                      {value === "dark" ? "Dark" : value === "light" ? "Light" : "System"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="settings-panel-card">
+                <h4>Accent colour</h4>
+                <p>A subtle highlight for buttons, selected items, and focus states.</p>
+                <div className="settings-colours" role="group" aria-label="Accent colour">
+                  {(["purple", "blue", "teal"] as const).map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-label={value + " accent"}
+                      aria-pressed={accent === value}
+                      className={`accent-choice ${value} ${accent === value ? "selected" : ""}`}
+                      onClick={() => setAccent(value)}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="settings-panel-card settings-preference-row">
+                <div>
+                  <h4>Compact spacing</h4>
+                  <p>Fit more content on screen with tighter padding.</p>
+                </div>
+                <label className="settings-switch">
+                  <input
+                    type="checkbox"
+                    checked={compact}
+                    aria-label="Compact spacing"
+                    onChange={(e) => setCompact(e.target.checked)}
+                  />
+                  <span aria-hidden="true" />
+                </label>
+              </div>
+
+              <div className="settings-panel-card settings-preference-row">
+                <div>
+                  <h4>Interface animations</h4>
+                  <p>Gentle transitions; system reduced-motion setting is always respected.</p>
+                </div>
+                <label className="settings-switch">
+                  <input
+                    type="checkbox"
+                    checked={animations}
+                    aria-label="Interface animations"
+                    onChange={(e) => setAnimations(e.target.checked)}
+                  />
+                  <span aria-hidden="true" />
+                </label>
+              </div>
             </div>
           )}
 
           {activeTab === "advanced" && (
             <div className="tab-pane">
               <div className="settings-panel-card">
+                <div className="settings-status-title">
+                  <div>
+                    <h4>Model selection</h4>
+                    <p>Currently selected: <strong>{provider === "auto" || model === "auto" ? "Forma Auto" : model}</strong></p>
+                  </div>
+                  <Sparkles size={19} aria-hidden="true" />
+                </div>
+                <label className="setting">
+                  <span>Selected model</span>
+                  <select
+                    aria-label="Selected model"
+                    disabled={busy}
+                    value={provider === "auto" || model === "auto" ? "auto" : JSON.stringify([provider, model])}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      const [nextProvider, nextModel] = value === "auto" ? ["auto", "auto"] : JSON.parse(value);
+                      onSelectModel(nextProvider, nextModel);
+                    }}
+                  >
+                    <option value="auto">Forma Auto (recommended smart routing)</option>
+                    {providers.map((p) => (
+                      <optgroup key={p.id} label={p.name}>
+                        {(p.models || []).map((m) => (
+                          <option
+                            key={m.id}
+                            value={JSON.stringify([p.id, m.id])}
+                            disabled={!p.working || (m.chat_compatible === false && !m.supports_image_generation)}
+                          >
+                            {m.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </label>
+                <p>Forma Auto dynamically selects the best model per request based on task type, attachments, and provider health.</p>
+              </div>
+
+              <div className="settings-panel-card">
                 <label className="setting temperature">
                   <span>Creativity / temperature <output>{temperature.toFixed(1)}</output></span>
-                  <input aria-label="Temperature" type="range" min="0" max="2" step="0.1"
-                    value={temperature} onChange={(e) => onTemperatureChange(Number(e.target.value))} />
+                  <input
+                    aria-label="Temperature"
+                    type="range"
+                    min="0"
+                    max="2"
+                    step="0.1"
+                    value={temperature}
+                    onChange={(e) => onTemperatureChange(Number(e.target.value))}
+                  />
                 </label>
-                <p>Lower values favour consistency. Higher values introduce more variation, depending on the provider and model.</p>
+                <p>Lower values favour consistency and factual precision. Higher values introduce more creative variation.</p>
               </div>
-              <div className="settings-panel-card"><h4>Model diagnostics</h4><p>Check provider availability and supported models in the Models section. Model failover is handled by the backend in Auto mode.</p></div>
-            </div>
-          )}
 
-          {activeTab === "about" && (
-            <div className="tab-pane">
               <div className="settings-panel-card">
-                <h4>Forma AI</h4>
-                <p>A personal AI chatbot built as a college project using React, TypeScript, FastAPI and SQLite.</p>
-                <p>Supports multiple hosted AI providers and optional local models through Ollama.</p>
-                <a className="settings-about-link" href="https://github.com/Tishal68/Forma-chatbot" target="_blank" rel="noopener noreferrer">
-                  View project on GitHub
-                </a>
+                <h4>Provider connections & health</h4>
+                <p>Active and configured model providers available to Forma.</p>
               </div>
-              <div className="settings-panel-card"><h4>About model output</h4><p>AI-generated answers may be incorrect. Check important facts and the sources used.</p></div>
+
+              <div className="providers-list-container">
+                {providers.map((p) => (
+                  <div key={p.id} className="provider-status-card">
+                    <div className="provider-card-header">
+                      <div>
+                        <strong>{p.name}</strong>
+                        {p.tagline && <span className="provider-card-tagline"> · {p.tagline}</span>}
+                      </div>
+                      {p.working ? (
+                        <span className="provider-badge-ok"><CheckCircle2 size={13} /> Available</span>
+                      ) : (
+                        <span className="provider-badge-error"><AlertTriangle size={13} /> {p.status || "Not configured"}</span>
+                      )}
+                    </div>
+                    {p.error && <p className="provider-error-detail">{p.error}</p>}
+                    {p.models && p.models.length > 0 && (
+                      <div className="provider-models-chips">
+                        {p.models.map((m) => (
+                          <span key={m.id} className="model-chip" title={m.description}>{m.name}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <button type="button" className="quiet refresh-models" onClick={onRefreshModels} disabled={busy}>
+                <RefreshCw size={15} /> Refresh connections
+              </button>
+
+              <div className="settings-panel-card">
+                <h4>Model failover & safety</h4>
+                <p>In Forma Auto mode, automatic failover reroutes to the next healthiest provider if rate limits, timeouts, or transient network errors occur.</p>
+              </div>
             </div>
           )}
         </section>

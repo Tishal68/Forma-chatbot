@@ -17,6 +17,7 @@ export function WelcomeView({
       <div className="welcome-inner">
         <h1 className="welcome-heading">What can we <span className="welcome-gradient-text">work on?</span></h1>
         <p className="welcome-subtitle">Ask, explore, build, and create with Forma.</p>
+        <p className="welcome-auto-note">Forma automatically chooses the best available model for your request.</p>
 
         <div className="welcome-suggestions-grid">
           <button

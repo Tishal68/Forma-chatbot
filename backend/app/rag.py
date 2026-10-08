@@ -1,9 +1,10 @@
 """Hybrid Retrieval-Augmented Generation (RAG) engine.
 
 Combines SQLite FTS5 full-text keyword search (BM25) with lightweight,
-CPU-friendly dense vector embeddings via Reciprocal Rank Fusion (RRF).
-Preserves accurate file, page, and line citation metadata while enforcing
-strict untrusted-content delimiters to defend against prompt injection.
+CPU-friendly dense lexical vectors using token and character n-gram hashing
+via Reciprocal Rank Fusion (RRF). Preserves accurate file, page, and line
+citation metadata while enforcing strict untrusted-content delimiters to defend
+against prompt injection.
 """
 import hashlib
 import json
@@ -26,7 +27,7 @@ def now_utc() -> str:
 
 def compute_dense_vector(text: str, dim: int = VECTOR_DIM) -> list[float]:
     """
-    Generate a normalized dense semantic representation using subword/token hashing
+    Generate a normalized dense lexical representation using deterministic subword/token hashing
     and term-frequency weighting. Deterministic, fast, and 100% CPU-compatible.
     """
     tokens = re.findall(r'[a-zA-Z0-9_]{2,}', text.lower())
@@ -172,9 +173,15 @@ def index_attachment(attachment_id: str, conversation_id: str, visitor_id: str, 
 
     stamp = now_utc()
     with connect() as db:
-        # Clear any prior chunks for this attachment
+        # Clear any prior chunks and FTS entries for this attachment (FTS first before deleting parent chunks)
+        db.execute(
+            '''
+            DELETE FROM document_chunks_fts
+            WHERE chunk_id IN (SELECT id FROM document_chunks WHERE attachment_id = ?)
+            ''',
+            (attachment_id,)
+        )
         db.execute('DELETE FROM document_chunks WHERE attachment_id = ?', (attachment_id,))
-        db.execute('DELETE FROM document_chunks_fts WHERE chunk_id IN (SELECT id FROM document_chunks WHERE attachment_id = ?)', (attachment_id,))
 
         for c in chunks:
             cid = str(uuid.uuid4())
@@ -209,6 +216,13 @@ def index_attachment(attachment_id: str, conversation_id: str, visitor_id: str, 
 def delete_attachment_chunks(attachment_id: str):
     """Remove chunks and FTS entries when an attachment is deleted."""
     with connect() as db:
+        db.execute(
+            '''
+            DELETE FROM document_chunks_fts
+            WHERE chunk_id IN (SELECT id FROM document_chunks WHERE attachment_id = ?)
+            ''',
+            (attachment_id,)
+        )
         db.execute('DELETE FROM document_chunks WHERE attachment_id = ?', (attachment_id,))
 
 

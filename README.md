@@ -33,7 +33,7 @@ Whether connected to ultra-fast cloud inference (**Groq**, **Google Gemini**, **
 
 ### 📚 CPU-Friendly Hybrid RAG Engine
 - **Semantic Document Chunking**: Ingests PDFs, DOCX files, codebases, CSVs, and plain text with 1,000-character semantic windows and 150-character overlaps, preserving line numbers and page markers.
-- **Lexical BM25 + Dense Vector Hybrid Search**: Combines SQLite FTS5 full-text search with 128-dimensional dense vector embeddings using Reciprocal Rank Fusion (RRF; $k=60$)—delivering high-precision semantic retrieval with zero GPU or PyTorch overhead.
+- **Lexical BM25 + Dense Lexical Vector Hybrid Search**: Combines SQLite FTS5 full-text search with 128-dimensional dense lexical vectors using token and character n-gram hashing and Reciprocal Rank Fusion (RRF; $k=60$)—delivering fast, high-precision retrieval with zero GPU or PyTorch overhead.
 - **Strict Evidence Boundaries**: Injects context into prompts using isolated `<retrieved_evidence>` boundaries to eliminate hallucinations and prompt injection vectors.
 
 ### 💾 Categorized Long-Term Memory Engine
@@ -43,7 +43,7 @@ Whether connected to ultra-fast cloud inference (**Groq**, **Google Gemini**, **
 
 ### 🤖 Autonomous Agent Mode & Safe Tool Suite
 - **Multi-Step ReAct Agent**: Solves complex questions using an iterative ReAct reasoning loop (budgeted up to 6 steps) with real-time thought and action streaming.
-- **AST-Validated Safe Python Sandbox**: Executes mathematical analysis, calculations, and data scripts within a restricted execution environment with strict AST verification, sanitized builtins, and memory limits.
+- **AST-Validated Safe Python Sandbox**: Executes mathematical analysis, calculations, and data scripts in-process with strict AST syntax verification, restricted builtins, and execution timeouts.
 - **GitHub Repository Inspector**: Safely inspects public repositories, directory trees, commit structures, and README files.
 - **Structured Data Processor**: Parses, cleans, and computes summary statistics for CSV and JSON datasets.
 - **Immutable Tool Audit Logging**: Every tool execution is captured in SQLite with execution duration, arguments, and outputs.
@@ -174,7 +174,7 @@ Open **http://127.0.0.1:5173** in your browser.
 Forma maintains an extensive automated test suite covering routing, memory, RAG, sandboxing, and UI responsiveness:
 
 ```bash
-# Run all backend unit & integration tests (114+ tests)
+# Run all backend unit & integration tests (154+ tests)
 python -m pytest -q
 
 # Run frontend build & Playwright responsive tests
