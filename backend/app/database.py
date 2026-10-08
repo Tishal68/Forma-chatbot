@@ -77,7 +77,6 @@ def initialize():
           updated_at TEXT NOT NULL DEFAULT '',
           UNIQUE(visitor_id, key));
         CREATE INDEX IF NOT EXISTS memories_visitor ON memories(visitor_id);
-        CREATE INDEX IF NOT EXISTS memories_visitor_cat ON memories(visitor_id, category);
         CREATE TABLE IF NOT EXISTS message_attachments (
           message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
           attachment_id TEXT NOT NULL REFERENCES attachments(id) ON DELETE CASCADE,
