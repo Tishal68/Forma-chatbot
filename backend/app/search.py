@@ -176,18 +176,18 @@ async def perform_search(query: str, max_results: int = 5) -> list[dict]:
     Perform web search through configured API services (Tavily, Brave) or DuckDuckGo fallback,
     with in-memory TTL caching and URL deduplication. Never invents results.
     """
+    provider = settings.SEARCH_PROVIDER
+    if provider in ('disabled', 'none'):
+        raise SearchError('Web search is currently disabled in workspace settings.')
+    if provider not in ('auto', 'duckduckgo', 'tavily', 'brave'):
+        raise SearchError('Unknown SEARCH_PROVIDER. Use auto, duckduckgo, tavily, or brave.')
+
     cache_key = ' '.join(query.lower().split())
     now_ts = time.time()
     if cache_key in _SEARCH_CACHE:
         cached_ts, cached_results = _SEARCH_CACHE[cache_key]
         if now_ts - cached_ts < SEARCH_CACHE_TTL:
             return [dict(r) for r in cached_results[:max_results]]
-
-    provider = settings.SEARCH_PROVIDER
-    if provider in ('disabled', 'none'):
-        raise SearchError('Web search is currently disabled in workspace settings.')
-    if provider not in ('auto', 'duckduckgo', 'tavily', 'brave'):
-        raise SearchError('Unknown SEARCH_PROVIDER. Use auto, duckduckgo, tavily, or brave.')
 
     options = []
     if settings.TAVILY_API_KEY:
