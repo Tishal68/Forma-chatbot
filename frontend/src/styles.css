@@ -2241,3 +2241,25 @@ dialog::backdrop {
     transition: none !important;
   }
 }
+
+/* Personalization uses the same native, accessible controls as other settings. */
+.personalization-pane { display: grid; gap: 14px; }
+.personalization-pane fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: 14px; }
+.personalization-pane p { margin: 0; line-height: 1.5; }
+.personalization-pane h3 { margin: 8px 0 0; }
+.personalization-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.personalization-pane .setting { display: grid; gap: 6px; }
+.personalization-pane input:not([type="checkbox"]), .personalization-pane textarea {
+  width: 100%; min-width: 0; box-sizing: border-box; padding: 10px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--bg); color: var(--text); font: inherit;
+}
+.personalization-pane textarea { resize: vertical; }
+.personalization-toggle { display: flex; align-items: center; gap: 8px; }
+.setting-help { color: var(--muted); font-size: 13px; }
+.personalization-error { color: #dc4848; }
+.memory-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.memory-list li { border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow-wrap: anywhere; }
+.memory-list p { margin: 6px 0; white-space: pre-wrap; }
+.memory-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.settings-tabs { flex-wrap: wrap; }
+@media (max-width: 540px) { .personalization-fields { grid-template-columns: 1fr; } }

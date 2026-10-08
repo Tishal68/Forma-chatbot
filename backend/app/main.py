@@ -19,7 +19,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .config import ROOT, settings
-from .context import build_context
+from .context import build_context, generation_limits
+from .personalization import router as personalization_router, capture_explicit, profile_context
+from .sources import resolve_attachments, document_excerpt, previous_search_context
 from .database import connect, initialize
 from .extractors import check_vision_support, extract_file_content, sanitize_filename, validate_file_type
 from .providers import (
@@ -100,6 +102,7 @@ app = FastAPI(
     description='Private AI conversational workspace supporting local Ollama, Groq, OpenAI, Gemini, and OpenRouter',
     lifespan=lifespan,
 )
+app.include_router(personalization_router)
 
 
 @app.middleware('http')
@@ -517,6 +520,13 @@ async def get_conversation(cid: str, request: Request):
             mid = ad.get('message_id')
             if mid:
                 attachments_by_msg.setdefault(mid, []).append(ad)
+        by_id = {a['id']: dict(a) for a in attachments}
+        for link in db.execute('SELECT ma.message_id, ma.attachment_id FROM message_attachments ma '
+                               'JOIN messages m ON m.id = ma.message_id WHERE m.conversation_id = ?', (cid,)):
+            attachment = by_id.get(link['attachment_id'])
+            group = attachments_by_msg.setdefault(link['message_id'], [])
+            if attachment and not any(a['id'] == attachment['id'] for a in group):
+                group.append(attachment)
 
         parsed_messages = []
         for m in messages:
@@ -585,8 +595,6 @@ async def clear_all_conversations(request: Request):
             (visitor_id,),
         ).fetchall()
         cids = [r['id'] for r in rows]
-        if not cids:
-            return {'ok': True}
 
         # Check if any conversation belonging to this visitor is actively generating
         for cid in cids:
@@ -597,6 +605,8 @@ async def clear_all_conversations(request: Request):
                 )
 
         db.execute('DELETE FROM conversations WHERE visitor_id = ?', (visitor_id,))
+        db.execute('DELETE FROM memories WHERE visitor_id = ?', (visitor_id,))
+        db.execute('DELETE FROM visitor_profiles WHERE visitor_id = ?', (visitor_id,))
 
     # Remove ONLY this visitor's attachment folders
     for cid in cids:
@@ -844,12 +854,38 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
             ).fetchone()
             if not original:
                 raise HTTPException(status_code=400, detail='No message to regenerate.')
-            saved_ids = [row['id'] for row in db.execute(
-                'SELECT id FROM attachments WHERE conversation_id = ? AND message_id = ?',
-                (cid, original['id']),
+            saved_ids = [row['attachment_id'] for row in db.execute(
+                'SELECT attachment_id FROM message_attachments WHERE message_id = ?',
+                (original['id'],),
             )]
             body = body.model_copy(update={'content': original['content'], 'attachment_ids': saved_ids,
                                            'web_search': bool(original['web_search']), 'output_mode': original['output_mode']})
+
+    # Resolve context against the history that will survive editing/regeneration.
+    # Never use future turns, their sources or their summary to route an edit.
+    cutoff = original['id'] if body.regenerate else body.edit_message_id
+    with connect() as db:
+        if body.edit_message_id is not None:
+            if not db.execute("SELECT id FROM messages WHERE id = ? AND conversation_id = ? AND role = 'user'",
+                              (body.edit_message_id, cid)).fetchone():
+                raise HTTPException(404, 'User message not found.')
+            conv = {**conv, 'summary': '', 'summary_through': 0}
+            if not body.attachment_ids:
+                saved_ids = [r['attachment_id'] for r in db.execute(
+                    'SELECT attachment_id FROM message_attachments WHERE message_id = ?', (body.edit_message_id,))]
+                body = body.model_copy(update={'attachment_ids': saved_ids})
+        prior_history = [dict(r) for r in db.execute(
+            'SELECT * FROM messages WHERE conversation_id = ? AND (? IS NULL OR id < ?) ORDER BY id',
+            (cid, cutoff, cutoff))]
+        source_rows = db.execute(
+            'SELECT a.id, a.filename, a.is_image, ma.message_id AS reference_id FROM message_attachments ma '
+            'JOIN attachments a ON a.id = ma.attachment_id JOIN messages m ON m.id = ma.message_id '
+            'WHERE m.conversation_id = ? AND a.conversation_id = ? AND (? IS NULL OR m.id < ?) '
+            'ORDER BY m.id, a.created_at, a.id', (cid, cid, cutoff, cutoff)).fetchall()
+    source_links, available = {}, {}
+    for row in source_rows:
+        source_links.setdefault(row['reference_id'], []).append(row['id'])
+        available[row['id']] = dict(row)
 
     # Attachments validation
     attachments = []
@@ -866,6 +902,21 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
 
     if not body.regenerate and not body.content.strip() and not attachments:
         raise HTTPException(status_code=422, detail='Write a message or attach a file first.')
+
+    if not attachments and body.output_mode != 'image':
+        attachments = resolve_attachments(body.content, prior_history, list(available.values()), source_links)
+        if attachments:
+            # Load large extracted text only for the selected sources, not once
+            # for every historical reference to the same upload.
+            selected_ids = [a['id'] for a in attachments]
+            with connect() as db:
+                placeholders = ','.join('?' * len(selected_ids))
+                rows = db.execute(f'SELECT * FROM attachments WHERE conversation_id = ? AND id IN ({placeholders})',
+                                  (cid, *selected_ids)).fetchall()
+            selected = {r['id']: dict(r) for r in rows}
+            attachments = [selected[aid] for aid in selected_ids if aid in selected]
+            if len(attachments) != len(selected_ids):
+                raise HTTPException(404, 'A referenced file is no longer available. Please attach it again.')
 
     image_attachments = [a for a in attachments if a['is_image']]
     doc_attachments = [a for a in attachments if not a['is_image']]
@@ -906,6 +957,7 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
                 is_web_search=body.web_search,
                 content=body.content,
                 healthy_providers=configured_providers,
+                history=prior_history[-12:], summary=conv.get('summary', ''),
             )
         except ValueError as ve:
             raise HTTPException(status_code=400, detail=str(ve))
@@ -958,13 +1010,18 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
 
     # Build prompt content
     user_text = body.content.strip()
-    attachment_texts = [a['extracted_text'] for a in attachments if not a['is_image'] and a.get('extracted_text')]
+    attachment_texts = [document_excerpt(a, user_text, max_chars=max(2000, 18000 // max(1, len(doc_attachments))))
+                        for a in doc_attachments if a.get('extracted_text')]
+    if not body.web_search:
+        historical_sources = previous_search_context(user_text, prior_history)
+        if historical_sources:
+            attachment_texts.append(historical_sources)
     if attachment_texts:
         docs_block = '\n\n'.join(attachment_texts)
         if user_text:
             full_user_content = f'{user_text}\n\n[Attached Files & Context]:\n{docs_block}'
         else:
-            full_user_content = f'[Attached Files & Context]:\n{docs_block}'
+            full_user_content = f'Analyze the attached files.\n\n[Attached Files & Context]:\n{docs_block}'
     else:
         full_user_content = user_text or (f"Analyze {attachments[0]['filename']}" if attachments else '')
 
@@ -1021,12 +1078,15 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
                 (cid, display_user_text, now(), 1 if body.web_search else 0, body.output_mode),
             ).lastrowid
 
-            if body.attachment_ids:
-                placeholders = ','.join('?' * len(body.attachment_ids))
+            if attachments:
+                attachment_ids = [a['id'] for a in attachments]
+                placeholders = ','.join('?' * len(attachment_ids))
                 db.execute(
-                    f'UPDATE attachments SET message_id = ? WHERE id IN ({placeholders}) AND conversation_id = ?',
-                    (uid, *body.attachment_ids, cid),
+                    f'UPDATE attachments SET message_id = ? WHERE id IN ({placeholders}) AND conversation_id = ? AND message_id IS NULL',
+                    (uid, *attachment_ids, cid),
                 )
+                db.executemany('INSERT OR IGNORE INTO message_attachments(message_id, attachment_id) VALUES (?, ?)',
+                               [(uid, aid) for aid in attachment_ids])
 
             if conv['title'] == 'New chat':
                 auto_title = ' '.join(display_user_text.split()[:8])[:60].strip()
@@ -1051,6 +1111,11 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
         ).lastrowid
         db.execute('UPDATE conversations SET updated_at = ? WHERE id = ?', (now(), cid))
 
+    memory_notice = capture_explicit(visitor_id, body.content) if not body.regenerate else ''
+    personalization = profile_context(visitor_id, body.content)
+    if memory_notice:
+        personalization += '\nApplication memory operation result for this turn: ' + memory_notice
+
     queue: asyncio.Queue = asyncio.Queue(maxsize=128)
 
     async def emit(kind: str, **data):
@@ -1069,11 +1134,14 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
                     has_images=has_images,
                     healthy_providers=configured_providers,
                     has_documents=has_docs, is_web_search=body.web_search, content=body.content,
+                    history=prior_history[-12:], summary=conv.get('summary', ''),
                 ):
                     candidates.append((fb_p, fb_m, fb_reason))
 
             if search_results:
                 await emit('sources', sources=search_results)
+            if memory_notice:
+                await emit('status', message=memory_notice)
 
             for cand_idx, (curr_provider, curr_model, curr_reason) in enumerate(candidates):
                 curr_is_cloud = curr_provider != 'ollama'
@@ -1131,7 +1199,10 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
                             notify,
                             is_openai_format=curr_is_cloud,
                             provider=curr_provider,
+                            personalization=personalization,
+                            image_count=len(image_b64s),
                         )
+                        context_window, output_tokens = generation_limits(curr_provider, curr_model)
 
                         if curr_is_cloud:
                             cloud_messages = [dict(m) for m in context]
@@ -1154,7 +1225,7 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
                                     'messages': cloud_messages,
                                     'stream': True,
                                     'temperature': body.temperature,
-                                    'max_tokens': min(settings.OUTPUT_TOKENS, 4096),
+                                    'max_tokens': output_tokens,
                                 },
                             ) as response:
                                 if response.status_code >= 400:
@@ -1200,8 +1271,8 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
                                     'stream': True,
                                     'options': {
                                         'temperature': body.temperature,
-                                        'num_ctx': settings.CONTEXT_TOKENS,
-                                        'num_predict': settings.OUTPUT_TOKENS,
+                                        'num_ctx': context_window,
+                                        'num_predict': output_tokens,
                                     },
                                 },
                             ) as response:

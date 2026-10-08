@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { ModelDetail, ProviderInfo } from "../types";
+import { PersonalizationSettings } from "./PersonalizationSettings";
 
 interface SettingsModalProps {
   open: boolean;
@@ -52,7 +53,7 @@ export function SettingsModal({
   onClearAll,
 }: SettingsModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const [activeTab, setActiveTab] = useState<"general" | "providers" | "guide" | "privacy">("general");
+  const [activeTab, setActiveTab] = useState<"general" | "personalization" | "providers" | "guide" | "privacy">("general");
 
   useEffect(() => {
     if (open) {
@@ -89,6 +90,11 @@ export function SettingsModal({
 
       {/* Settings Navigation Tabs */}
       <div className="settings-tabs" role="tablist">
+        <button type="button" role="tab" aria-selected={activeTab === "personalization"}
+          className={`settings-tab ${activeTab === "personalization" ? "active" : ""}`}
+          onClick={() => setActiveTab("personalization")}>
+          <Sparkles size={15} /><span>Personalization</span>
+        </button>
         <button
           type="button"
           role="tab"
@@ -132,6 +138,7 @@ export function SettingsModal({
       </div>
 
       <div className="settings-tab-content">
+        {open && activeTab === "personalization" && <PersonalizationSettings />}
         {/* Tab 1: General */}
         {activeTab === "general" && (
           <div className="tab-pane">
@@ -256,7 +263,7 @@ export function SettingsModal({
               <li>
                 <strong>Follow up naturally</strong>
                 <p>
-                  Forma remembers context throughout the chat session. You can edit prior prompts or regenerate responses at any time.
+                  Forma uses recent context to understand follow-ups and reselects a model for each message in Auto. Save preferences and memories in Personalization to use them across chats in this browser.
                 </p>
               </li>
             </ol>
@@ -280,8 +287,8 @@ export function SettingsModal({
 
             <div className="danger-zone" style={{ marginTop: "24px" }}>
               <div>
-                <strong>Clear all conversations</strong>
-                <p>Permanently remove all chat history and uploaded files for this session.</p>
+                <strong>Clear all conversations and personalization</strong>
+                <p>Permanently remove all chats, uploaded files, saved preferences, custom instructions, and memories for this session.</p>
               </div>
               <button
                 disabled={busy}

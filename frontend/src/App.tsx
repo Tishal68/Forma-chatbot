@@ -820,7 +820,7 @@ export function App() {
         temperature={temperature}
         onTemperatureChange={setTemperature}
         onClearAll={async () => {
-          if (!(await ask("Permanently delete ALL conversations?"))) return;
+          if (!(await ask("Permanently delete ALL conversations, files, saved preferences, custom instructions, and memories?"))) return;
           try {
             await api("/conversations", { method: "DELETE" });
             newChat();

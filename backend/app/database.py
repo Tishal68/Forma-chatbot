@@ -61,6 +61,22 @@ def initialize():
 
         CREATE INDEX IF NOT EXISTS attachments_conv ON attachments(conversation_id);
         CREATE INDEX IF NOT EXISTS attachments_msg ON attachments(message_id);
+
+        CREATE TABLE IF NOT EXISTS visitor_profiles (
+          visitor_id TEXT PRIMARY KEY,
+          memory_enabled INTEGER NOT NULL DEFAULT 1,
+          preferences TEXT NOT NULL DEFAULT '{}',
+          custom_instructions TEXT NOT NULL DEFAULT '');
+        CREATE TABLE IF NOT EXISTS memories (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          visitor_id TEXT NOT NULL,
+          key TEXT NOT NULL, value TEXT NOT NULL,
+          UNIQUE(visitor_id, key));
+        CREATE INDEX IF NOT EXISTS memories_visitor ON memories(visitor_id);
+        CREATE TABLE IF NOT EXISTS message_attachments (
+          message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+          attachment_id TEXT NOT NULL REFERENCES attachments(id) ON DELETE CASCADE,
+          PRIMARY KEY(message_id, attachment_id));
         ''')
 
         # Safely migrate existing tables if columns are missing
@@ -87,3 +103,5 @@ def initialize():
         attachment_columns = [r['name'] for r in db.execute('PRAGMA table_info(attachments)')]
         if 'generated' not in attachment_columns:
             db.execute('ALTER TABLE attachments ADD COLUMN generated INTEGER NOT NULL DEFAULT 0')
+        db.execute('INSERT OR IGNORE INTO message_attachments(message_id, attachment_id) '
+                   'SELECT message_id, id FROM attachments WHERE message_id IS NOT NULL AND generated = 0')

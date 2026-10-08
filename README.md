@@ -201,3 +201,59 @@ npm run build
 ```
 
 `test:ui` starts its own Vite server and mocks provider responses. Backend adapter tests also use controlled image fixtures. These tests verify integration behavior, not image quality or current paid-account access. Test a live image request after deploying with an available image provider.
+
+### Personalization and follow-ups
+
+Open **Settings → Personalization** to save a preferred name, language, tone,
+answer length, explanation level, interests, and custom instructions. Saved
+preferences apply across chats belonging to the same signed browser session.
+They are not shared between visitors or synchronized across devices. Clearing
+cookies changes your identity; keep the database and session secret persistent.
+
+Forma also recognizes narrowly defined, explicit declarations such as `My name
+is Tishal.`, `I prefer concise answers.`, and `Remember this: my project name is
+Cedar.` Complex preferences can be entered in settings. Memory extraction never
+uses uploaded files or assistant replies. Repeating the same memory subject
+updates that fact. Saved memories have labels, are limited to 50 per visitor,
+and can be edited or deleted. Relevant memories are selected by bounded lexical
+matching, not embeddings or an extra paid inference call. The current request
+takes precedence over saved preferences.
+
+Turn off **Use and save personalization**, then save, to disable both capture
+and prompt injection of saved personalization. Existing conversation history is
+still used in its own chat. **Forget all personalization** removes preferences,
+custom instructions and memories while keeping chats. **Clear all chats** removes
+both chats/files and saved personalization. Deleting one chat leaves separately
+saved personalization intact.
+
+Auto reevaluates every message using explicit task cues and up to six recent
+user turns (or an available summary for an elliptical request). Short follow-ups
+inherit the recent task; an explicit new topic resets it. This is deterministic
+routing, not a semantic LLM classifier, so ambiguous requests can still need
+clarification. General chat models may be offered as clearly labeled text-task
+fallbacks when specialists are unavailable. Vision remains a required capability
+for image inputs. Editorial routing priorities are preferences, not benchmarks.
+
+Follow-ups can restore referenced document excerpts or uploaded images, including
+on regeneration. Name the file or say “first”, “second”, “both”, or “all” when
+several files are involved. Missing or ambiguous references produce a clear
+clarification instead of guessing. Follow-ups use at most four referenced files.
+Document retrieval retains source headings and line references where available;
+long documents use lexical section selection within a bounded prompt. Earlier
+web sources are labeled historical rather than presented as a fresh search.
+
+Context and output reservations now use consistent estimated-token units and
+respect model metadata plus `CONTEXT_TOKENS` / `OUTPUT_TOKENS`. When unset,
+context defaults to at most 32,768 for cloud models and 8,192 for Ollama, clamped
+to the model limit. Ollama receives that same effective `num_ctx`. The lightweight
+estimator uses conservative word/punctuation and multilingual byte bounds; it is
+not an exact provider tokenizer. `IMAGE_CONTEXT_TOKENS` defaults to 1,024 per
+image as a configurable estimate because provider/resolution costs differ.
+Oversized source excerpts are marked; an oversized user question is rejected
+with a useful message rather than silently cut. Failed or empty summaries never
+advance saved history boundaries. A bounded recent-history fallback explicitly
+reports that older turns are omitted while their originals remain in SQLite.
+
+Focused regression tests: `backend/tests/test_personalization_and_continuity.py`
+and `frontend/tests/personalization.spec.ts`. UI and backend provider responses
+are mocked; passing tests do not certify live inference quality or quota.

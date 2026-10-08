@@ -181,7 +181,8 @@ def test_feature_shortlist_reports_shortage_instead_of_inventing_models():
     assert coverage['chat']['status'] == 'limited'
     assert len(coverage['chat']['options']) == 1
     assert coverage['vision']['status'] == 'unavailable'
-    assert coverage['reasoning']['status'] == 'unavailable'
+    assert coverage['reasoning']['status'] == 'limited'
+    assert 'general chat fallback' in coverage['reasoning']['options'][0]['reason']
     health['ollama']['working'] = False
     assert providers.feature_coverage(health)['chat']['options'] == []
 

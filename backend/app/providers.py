@@ -5,6 +5,7 @@ import time
 from typing import Any
 import httpx
 from .config import settings
+from .routing import infer_task
 
 # Pre-configured providers and their top models with verified capability metadata
 PROVIDERS: dict[str, dict[str, Any]] = {
@@ -19,6 +20,7 @@ PROVIDERS: dict[str, dict[str, Any]] = {
         "models": [
             {
                 "id": "openai/gpt-oss-120b",
+                "routing_priority": 80,
                 "name": "GPT-OSS 120B",
                 "provider": "groq",
                 "badge": "⚡ Blazing Fast & Reasoning",
@@ -33,6 +35,7 @@ PROVIDERS: dict[str, dict[str, Any]] = {
             },
             {
                 "id": "openai/gpt-oss-20b",
+                "routing_priority": 85,
                 "name": "GPT-OSS 20B",
                 "provider": "groq",
                 "badge": "⚡ Ultra Fast (500+ tok/s)",
@@ -47,6 +50,7 @@ PROVIDERS: dict[str, dict[str, Any]] = {
             },
             {
                 "id": "qwen/qwen3.8-27b",
+                "routing_priority": 70,
                 "name": "Qwen 3.8 27B",
                 "provider": "groq",
                 "badge": "🧠 Deep STEM & Math",
@@ -61,6 +65,7 @@ PROVIDERS: dict[str, dict[str, Any]] = {
             },
             {
                 "id": "allam-2-7b",
+                "routing_priority": 40,
                 "name": "ALLaM 2 7B",
                 "provider": "groq",
                 "badge": "🌐 Multilingual",
@@ -302,26 +307,21 @@ def get_vision_capable_models(healthy_providers: list[str] | None = None) -> lis
 
 def choose_auto_model(
     health: dict[str, dict[str, Any]], *, has_images: bool, has_documents: bool,
-    is_web_search: bool, content: str,
+    is_web_search: bool, content: str, history: list[dict] | None = None, summary: str = '',
 ) -> tuple[str, str, str]:
     """Choose only from models returned by healthy providers during this request.
 
     The shortlist comes from provider model-list APIs. Ollama capabilities come
     from /api/show; unknown Ollama capabilities are never assumed.
     """
-    text = (content or "").lower()
     if has_images:
         task = "image understanding"
     elif has_documents:
         task = "document analysis"
     elif is_web_search:
         task = "web-supported answers"
-    elif "```" in text or any(word in text for word in ("code", "program", "debug", "refactor", "traceback", "sql query")):
-        task = "coding"
-    elif any(word in text for word in ("prove", "derive", "theorem", "calculate", "math", "reason", "algorithm", "step by step")):
-        task = "complex reasoning"
     else:
-        task = "everyday chat"
+        task = infer_task(content, history, summary)
 
     ranked: list[tuple[int, str, str, str]] = []
     for provider, state in health.items():
@@ -346,11 +346,10 @@ def choose_auto_model(
             reasoning = bool(model.get("supports_reasoning"))
             fast = bool(model.get("is_fast"))
             coding = "code" in tags or model.get("specialty") == "code"
-            if task == "complex reasoning" and not reasoning:
-                continue
-            if task == "coding" and not (coding or reasoning):
-                continue
             context = int(model.get("context_window") or 0)
+            # Editorial preference, not a benchmark claim. Task capability carries
+            # more weight than speed; neutral metadata remains eligible for text.
+            priority = max(0, min(100, int(model.get('routing_priority', 50))))
             score = 0
             if task == "image understanding":
                 score = 100 + (10 if fast else 0) + (5 if reasoning else 0)
@@ -363,7 +362,10 @@ def choose_auto_model(
             elif task == "complex reasoning":
                 score = 30 + (30 if reasoning else 0) + (10 if coding else 0)
             else:
-                score = 30 + (25 if fast else 0) - (15 if reasoning else 0) - (5 if coding or model.get("supports_vision") else 0) + (5 if "general chat" in tags else 0)
+                score = 30 + (5 if fast else 0) - (2 if reasoning else 0) - (1 if coding or model.get("supports_vision") else 0) + (5 if "general chat" in tags else 0)
+            score += priority
+            if task in ('coding', 'complex reasoning') and not (reasoning or (task == 'coding' and coding)):
+                score -= 150  # A general chat fallback, not a verified specialist.
             # Stable ordering keeps choices predictable when scores tie.
             ranked.append((score, provider, mid, model.get("name") or mid))
     if not ranked:
@@ -371,7 +373,13 @@ def choose_auto_model(
         raise ValueError(f"No available {need} is ready. Refresh models or check your provider settings.")
     ranked.sort(key=lambda item: (-item[0], item[1], item[2]))
     _, provider, mid, name = ranked[0]
-    return provider, mid, f"Auto chose {name} ({PROVIDERS[provider]['name']}) for {task}."
+    detail = get_model_metadata(provider, mid)
+    state_details = health[provider].get('model_details', [])
+    detail = next((d for d in state_details if d['id'] == mid), detail)
+    specialist = detail.get('supports_reasoning') or (task == 'coding' and (
+        detail.get('specialty') == 'code' or 'code' in {str(t).lower() for t in detail.get('capabilities', [])}))
+    suffix = ' Using a general chat fallback; specialist capability is unverified.' if task in ('coding', 'complex reasoning') and not specialist else ''
+    return provider, mid, f"Auto chose {name} ({PROVIDERS[provider]['name']}) for {task}.{suffix}"
 
 
 TASKS = {
@@ -446,16 +454,16 @@ def routing_health(healthy_providers):
             if p in allowed and is_provider_configured(p) and 0 <= time.time() - stamp < CACHE_TTL_SECONDS}
 
 
-def select_auto_model(has_images, has_documents, is_web_search, content, healthy_providers=None):
+def select_auto_model(has_images, has_documents, is_web_search, content, healthy_providers=None, history=None, summary=''):
     return choose_auto_model(routing_health(healthy_providers), has_images=has_images,
-                             has_documents=has_documents, is_web_search=is_web_search, content=content)
+                             has_documents=has_documents, is_web_search=is_web_search, content=content, history=history, summary=summary)
 
 
 def get_fallback_candidates(current_provider, current_model, has_images=False, healthy_providers=None,
-                            has_documents=False, is_web_search=False, content=""):
+                            has_documents=False, is_web_search=False, content="", history=None, summary=''):
     options = recommend_models(routing_health(healthy_providers), limit=3,
                                has_images=has_images, has_documents=has_documents,
-                               is_web_search=is_web_search, content=content)
+                               is_web_search=is_web_search, content=content, history=history, summary=summary)
     return [(option['provider'], option['model'], option['reason']) for option in options
             if (option['provider'], option['model']) != (current_provider, current_model)][:2]
 
