@@ -10,7 +10,8 @@ It uses React and TypeScript for the frontend, FastAPI for the backend, and SQLi
 - Auto chooses a model for each message and tries up to two compatible backups if it fails before replying.
 - Save preferences and memories in Settings → Personalization.
 - Upload documents and images, and ask follow-up questions about them.
-- Search the web, edit messages, regenerate replies, and manage chat history.
+- Automatically search for current information, or turn on web search for any question.
+- Edit messages, regenerate replies, and manage chat history.
 - Use light or dark mode on desktop and mobile.
 
 Manual model selections stay selected. API keys are stored on the backend. Chats and preferences belong to the current browser session and do not sync across devices.

@@ -115,7 +115,8 @@ def test_vision_model_compatibility(client):
     assert 'does not support vision or image analysis' in chat_res.json()['detail']
 
 
-def test_web_search_failure_and_sources(client, monkeypatch):
+@pytest.mark.parametrize("explicit_search", [True, False])
+def test_web_search_failure_and_sources(client, monkeypatch, explicit_search):
     conv_id = client.post('/api/conversations').json()['id']
 
     # Test web search failure
@@ -130,7 +131,7 @@ def test_web_search_failure_and_sources(client, monkeypatch):
         'content': 'Latest news today',
         'provider': 'ollama',
         'model': 'llama3.2',
-        'web_search': True,
+        'web_search': explicit_search,
     })
     assert fail_res.status_code == 502
     assert 'Web search failed' in fail_res.json()['detail']
@@ -163,9 +164,9 @@ def test_web_search_failure_and_sources(client, monkeypatch):
 
     success_res = client.post('/api/chat', json={
         'conversation_id': conv_id,
-        'content': 'Where are the docs?',
+        'content': 'Latest Forma documentation',
         'provider': 'groq',
-        'web_search': True,
+        'web_search': explicit_search,
     })
     assert success_res.status_code == 200
     assert 'sources' in success_res.text
@@ -174,5 +175,7 @@ def test_web_search_failure_and_sources(client, monkeypatch):
     # Verify sources saved in DB
     conv_data = client.get(f'/api/conversations/{conv_id}').json()
     assistant_msg = [m for m in conv_data['messages'] if m['role'] == 'assistant'][-1]
+    user_msg = [m for m in conv_data['messages'] if m['role'] == 'user'][-1]
+    assert user_msg['web_search']
     assert len(assistant_msg['sources']) == 1
     assert assistant_msg['sources'][0]['url'] == 'https://forma.example/docs'

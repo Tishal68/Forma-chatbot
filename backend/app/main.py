@@ -18,6 +18,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Stre
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from .routing import needs_web_search
 from .config import ROOT, settings
 from .context import build_context, generation_limits
 from .personalization import router as personalization_router, capture_explicit, profile_context
@@ -933,6 +934,8 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
     ):
         body = body.model_copy(update={'output_mode': 'image'})
     output_image = body.output_mode == 'image'
+    if not output_image and not body.web_search and needs_web_search(body.content):
+        body = body.model_copy(update={'web_search': True})
     if output_image:
         if attachments or body.web_search:
             raise HTTPException(status_code=422, detail='Image creation currently accepts text prompts. Remove attachments and turn off web search.')
@@ -991,6 +994,12 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
     search_context = ''
     if body.web_search:
         search_query = body.content.strip()
+        if re.search(r'\b(?:search|verify|look up|fact[- ]?check)\b', search_query, re.I) and (
+            len(search_query.split()) <= 12 or re.search(r'\b(?:it|that|this|he|she|they)\b', search_query, re.I)
+        ):
+            previous_users = [m['content'] for m in prior_history[-12:] if m['role'] == 'user']
+            if previous_users:
+                search_query = previous_users[-1][:600] + ' ' + search_query
         if not search_query and attachments:
             search_query = attachments[0]['filename']
         if not search_query:

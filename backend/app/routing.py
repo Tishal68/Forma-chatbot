@@ -53,3 +53,25 @@ def infer_task(content: str, history: list[dict] | None = None, summary: str = '
         if not is_followup(text):
             return 'everyday chat'
     return explicit_task(summary[:2000]) or 'everyday chat'
+
+
+SEARCH_REQUEST = re.compile(r'\b(?:search (?:the )?(?:web|net|internet|online)|look (?:it |this |that )?up|google it|verify|fact[- ]?check)\b', re.I)
+FRESH_INFO = re.compile(
+    r'\b(?:today|tonight|yesterday|tomorrow|currently|current|latest|recent|now|'
+    r'news|weather|forecast|stock price|share price|exchange rate|live score|'
+    r'election results?|release date|opening hours|availability|outage)\b|'
+    r'\b(?:who|which).{0,80}\b(?:president|prime minister|chief minister|cm|ceo|captain|governor|minister)\b|'
+    r'\b(?:price|cost|schedule|standings|rankings)\b|\bcm\s*(?:of\s*)?tamil\s*nadu\b', re.I)
+
+
+def needs_web_search(content: str) -> bool:
+    """Search for explicit verification and changing facts, including manual models."""
+    text = content.strip()
+    if SEARCH_REQUEST.search(text):
+        return True
+    # Creative requests and quoted/code content do not trigger background searches.
+    if WRITING.search(text) or '```' in text:
+        return False
+    if explicit_task(text) in ('coding', 'complex reasoning'):
+        return bool(re.search(r'\b(?:latest|current version|recent release|today)\b', text, re.I))
+    return bool(FRESH_INFO.search(text))
