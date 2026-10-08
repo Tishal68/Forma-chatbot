@@ -80,87 +80,6 @@ PROVIDERS: dict[str, dict[str, Any]] = {
             },
         ],
     },
-    "openrouter": {
-        "id": "openrouter",
-        "name": "OpenRouter",
-        "tagline": "All Frontier Models",
-        "base_url": "https://openrouter.ai/api/v1",
-        "api_key_env": "OPENROUTER_API_KEY",
-        "key_url": "https://openrouter.ai/keys",
-        "default_model": "openai/gpt-4o-mini",
-        "models": [
-            {
-                "id": "openai/gpt-4o-mini",
-                "name": "GPT-4o Mini",
-                "provider": "openrouter",
-                "badge": "👁️ Vision & Fast",
-                "description": "Fast multimodal intelligence with verified image understanding, coding, and chat.",
-                "supports_vision": True,
-                "supports_reasoning": False,
-                "supports_search": True,
-                "is_fast": True,
-                "context_window": 128000,
-                "max_output_tokens": 4096,
-                "capabilities": ["Vision", "Fast", "Code"],
-            },
-            {
-                "id": "openai/gpt-4o",
-                "name": "GPT-4o",
-                "provider": "openrouter",
-                "badge": "🧠 Flagship Multimodal",
-                "description": "OpenAI flagship omni model for complex visual analysis, logic, and coding.",
-                "supports_vision": True,
-                "supports_reasoning": True,
-                "supports_search": True,
-                "is_fast": False,
-                "context_window": 128000,
-                "max_output_tokens": 4096,
-                "capabilities": ["Vision", "Reasoning", "Multimodal"],
-            },
-            {
-                "id": "deepseek/deepseek-r1",
-                "name": "DeepSeek R1",
-                "provider": "openrouter",
-                "badge": "🧠 Reasoning Leader",
-                "description": "Frontier open reasoning benchmark leader with deep step-by-step thinking.",
-                "supports_vision": False,
-                "supports_reasoning": True,
-                "supports_search": False,
-                "is_fast": False,
-                "context_window": 64000,
-                "max_output_tokens": 8192,
-                "capabilities": ["Deep Reasoning", "Math"],
-            },
-            {
-                "id": "meta-llama/llama-3.3-70b-instruct",
-                "name": "Llama 3.3 70B Instruct",
-                "provider": "openrouter",
-                "badge": "⚡ Top Frontier Open",
-                "description": "Meta's flagship open-weights instruction model with outstanding general intelligence.",
-                "supports_vision": False,
-                "supports_reasoning": True,
-                "supports_search": True,
-                "is_fast": False,
-                "context_window": 131072,
-                "max_output_tokens": 4096,
-                "capabilities": ["General", "Code", "Search"],
-            },
-            {
-                "id": "qwen/qwen-2.5-72b-instruct",
-                "name": "Qwen 2.5 72B Instruct",
-                "provider": "openrouter",
-                "badge": "💻 Elite Coding",
-                "description": "High-capability open model specialized in code generation, math, and technical tasks.",
-                "supports_vision": False,
-                "supports_reasoning": True,
-                "supports_search": True,
-                "is_fast": False,
-                "context_window": 131072,
-                "max_output_tokens": 4096,
-                "capabilities": ["Code", "Math", "Logic"],
-            },
-        ],
-    },
     "gemini": {
         "id": "gemini",
         "name": "Google Gemini",
@@ -415,7 +334,7 @@ def recommend_models(health, *, limit=3, **task):
 
 def image_options(health):
     options = []
-    for provider in ('ollama', 'openrouter'):
+    for provider in ('ollama',):
         state = health.get(provider, {})
         if not state.get('working'):
             continue
@@ -443,7 +362,7 @@ def feature_coverage(health):
         'label': 'Image generation', 'options': images,
         'status': 'ready' if len(images) >= 2 else 'limited' if images else 'unavailable',
         'message': f'{len(images)} image-generation options. Cloud usage may incur provider charges.' if images
-                   else 'No image generator is connected. Use a compatible experimental Ollama server or configure OpenRouter image models.',
+                   else 'No image generator is connected. Use a compatible experimental Ollama server with an installed image-generation model.',
     }
     return coverage
 
@@ -620,11 +539,7 @@ async def probe_provider_health(provider_name: str, force: bool = False) -> dict
     # Cloud provider probe
     key = get_api_key(p_lower)
     headers = {"Authorization": f"Bearer {key}"}
-    if p_lower == "openrouter":
-        headers["HTTP-Referer"] = "https://forma.local"
-        headers["X-Title"] = "Forma"
-        probe_url = "https://openrouter.ai/api/v1/auth/key"
-    elif p_lower == "gemini":
+    if p_lower == "gemini":
         probe_url = "https://generativelanguage.googleapis.com/v1beta/openai/models"
     elif p_lower == "groq":
         probe_url = "https://api.groq.com/openai/v1/models"
@@ -637,67 +552,11 @@ async def probe_provider_health(provider_name: str, force: bool = False) -> dict
             response = await c.get(probe_url, headers=headers)
             status_code = response.status_code
             if status_code == 200:
-                if p_lower == "openrouter":
-                    try:
-                        kdata = response.json().get("data", {})
-                        limit_remaining = kdata.get("limit_remaining")
-                        free_remaining = kdata.get("free_model_daily_requests", {}).get("remaining", 0)
-                        if limit_remaining is not None and limit_remaining <= 0 and free_remaining <= 0:
-                            res = {
-                                "id": p_lower,
-                                "configured": True,
-                                "working": False,
-                                "status": "quota_exceeded",
-                                "error": "OpenRouter account balance and daily free credits are exhausted.",
-                                "models": curated_ids,
-                            }
-                            _HEALTH_CACHE[p_lower] = (now_ts, res)
-                            return res
-                    except Exception:
-                        pass
-                if p_lower == "openrouter":
-                    response = await c.get("https://openrouter.ai/api/v1/models", headers=headers)
-                    response.raise_for_status()
                 listed = {m.get('id'): m for m in response.json().get('data', []) if isinstance(m, dict)}
                 reported = set(listed)
                 available = [mid for mid in curated_ids if mid in reported]
                 details = [dict(m) for m in config.get('models', []) if m['id'] in available]
-                if p_lower == 'openrouter':
-                    for detail in details:
-                        live = listed[detail['id']]
-                        architecture = live.get('architecture') or {}
-                        inputs = architecture.get('input_modalities') or []
-                        outputs = architecture.get('output_modalities') or []
-                        detail['supports_vision'] = 'image' in inputs
-                        detail['supports_image_generation'] = 'image' in outputs
-                        detail['chat_compatible'] = 'text' in inputs and 'text' in outputs
-                        detail['supports_reasoning'] = bool({'reasoning', 'include_reasoning'} & set(live.get('supported_parameters') or []))
-                        detail['context_window'] = live.get('context_length') or detail.get('context_window', 0)
-                        detail['capabilities'] = [tag for tag in detail.get('capabilities', []) if tag not in ('Vision', 'Reasoning', 'Deep Reasoning')]
-                        if detail['supports_vision']:
-                            detail['capabilities'].append('Vision')
-                        if detail['supports_reasoning']:
-                            detail['capabilities'].append('Reasoning')
-                if p_lower == 'openrouter':
-                    try:
-                        image_list = await c.get('https://openrouter.ai/api/v1/images/models', headers=headers)
-                        image_list.raise_for_status()
-                        for image_model in image_list.json().get('data', []):
-                            architecture = image_model.get('architecture') or {}
-                            if 'image' not in architecture.get('output_modalities', []) or 'text' not in architecture.get('input_modalities', []):
-                                continue
-                            mid = image_model.get('id')
-                            if not isinstance(mid, str) or not mid:
-                                continue
-                            image_detail = {'id': mid, 'name': image_model.get('name') or mid, 'provider': 'openrouter',
-                                'description': 'Creates images from text prompts through OpenRouter.', 'badge': 'Image generation',
-                                'chat_compatible': False, 'supports_image_generation': True,
-                                'supports_vision': False, 'supports_reasoning': False, 'capabilities': ['Image generation']}
-                            details = [d for d in details if d['id'] != mid] + [image_detail]
-                            if mid not in available:
-                                available.append(mid)
-                    except (httpx.HTTPError, ValueError):
-                        pass  # Image discovery failure must not disable working chat models.
+
                 res = {
                     "id": p_lower,
                     "configured": True,

@@ -86,17 +86,6 @@ def test_manual_text_model_never_silently_switched(client):
     assert client.get('/api/conversations/' + cid).json()['messages'] == []
 
 
-def test_openrouter_image_adapter(png):
-    async def run():
-        def handler(request):
-            assert request.url.path == '/images'
-            assert json.loads(request.content)['n'] == 1
-            return httpx.Response(200, json={'data':[{'b64_json':base64.b64encode(png).decode(), 'media_type':'image/png'}]})
-        async def notify(message): pass
-        async with httpx.AsyncClient(base_url='http://test', transport=httpx.MockTransport(handler)) as c:
-            result = await generate_image(c, 'openrouter', 'verified-image-model', 'A cat', notify)
-        assert result == (png, ('image/png', 'png'))
-    asyncio.run(run())
 
 
 def test_cancel_image_generation_closes_provider_stream():
@@ -142,24 +131,6 @@ def test_image_only_ollama_is_available_for_images_not_chat(monkeypatch):
     assert not detail['supports_vision']
 
 
-def test_openrouter_discovers_image_models_without_chat_models(monkeypatch):
-    from app import providers
-    monkeypatch.setenv('OPENROUTER_API_KEY', 'test-only')
-    monkeypatch.setattr(providers, '_HEALTH_CACHE', {})
-    def handler(request):
-        if request.url.path.endswith('/auth/key'):
-            return httpx.Response(200, json={'data': {'limit_remaining': 10}})
-        if request.url.path.endswith('/images/models'):
-            return httpx.Response(200, json={'data': [{
-                'id': 'example/painter', 'name': 'Painter',
-                'architecture': {'input_modalities': ['text'], 'output_modalities': ['image']}}]})
-        return httpx.Response(200, json={'data': []})
-    client_type = httpx.AsyncClient
-    monkeypatch.setattr(providers.httpx, 'AsyncClient', lambda **kwargs: client_type(transport=httpx.MockTransport(handler), **kwargs))
-    state = asyncio.run(providers.probe_provider_health('openrouter'))
-    assert state['working']
-    assert state['models'] == ['example/painter']
-    assert providers.image_options({'openrouter': state})[0]['model'] == 'example/painter'
 
 
 

@@ -120,7 +120,8 @@ def test_ollama_metadata_probe_is_cached_and_does_not_guess(monkeypatch):
     assert requests.count('/api/tags') == 1
     assert requests.count('/api/show') == 2
 
-def test_auto_fails_over_before_output_and_records_actual_model(client, monkeypatch):
+@pytest.mark.parametrize("failure_status", [401, 402, 403, 429, 500, 503])
+def test_auto_fails_over_before_output_and_records_actual_model(client, monkeypatch, failure_status):
     names = ['openai/gpt-oss-20b', 'openai/gpt-oss-120b']
     state = {'working': True, 'models': names}
     monkeypatch.setattr(providers, '_HEALTH_CACHE', {})
@@ -134,7 +135,7 @@ def test_auto_fails_over_before_output_and_records_actual_model(client, monkeypa
         payload = json.loads(request.content)
         calls.append(payload['model'])
         if len(calls) == 1:
-            return httpx.Response(429, json={'error': {'message': 'Rate limited'}})
+            return httpx.Response(failure_status, json={'error': {'message': 'Provider unavailable'}})
         return httpx.Response(200, text='data: {"choices":[{"delta":{"content":"success"}}]}\n\ndata: [DONE]\n\n')
     mock_transport(monkeypatch, handler)
     cid = client.post('/api/conversations').json()['id']
@@ -196,20 +197,11 @@ def test_shortlist_prefers_independent_providers():
     assert options[0]['provider'] != options[1]['provider']
 
 
-def test_openrouter_capabilities_use_live_metadata(monkeypatch):
-    monkeypatch.setenv('OPENROUTER_API_KEY', 'test-only')
-    monkeypatch.setattr(providers, '_HEALTH_CACHE', {})
-    def handler(request):
-        if request.url.path.endswith('/auth/key'):
-            return httpx.Response(200, json={'data': {'limit_remaining': 10}})
-        return httpx.Response(200, json={'data': [{
-            'id': 'openai/gpt-4o', 'architecture': {'input_modalities': ['text'], 'output_modalities': ['text']},
-            'supported_parameters': [], 'context_length': 8192}]})
-    client_type = httpx.AsyncClient
-    monkeypatch.setattr(providers.httpx, 'AsyncClient', lambda **kwargs: client_type(transport=httpx.MockTransport(handler), **kwargs))
-    state = asyncio.run(providers.probe_provider_health('openrouter'))
-    detail = state['model_details'][0]
-    assert detail['supports_vision'] is False  # Overrides the older curated claim.
-    assert detail['supports_reasoning'] is False
-    assert detail['context_window'] == 8192
-    assert providers.feature_coverage({'openrouter': state})['vision']['options'] == []
+
+
+def test_removed_provider_cannot_be_enabled_by_environment(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "stale-key")
+    assert "openrouter" not in providers.PROVIDERS
+    assert not providers.is_provider_configured("openrouter")
+    state = asyncio.run(providers.probe_provider_health("openrouter", force=True))
+    assert not state["working"] and state["models"] == []

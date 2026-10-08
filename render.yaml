@@ -38,7 +38,5 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
-      - key: OPENROUTER_API_KEY
-        sync: false
       - key: SEARCH_PROVIDER
         value: duckduckgo

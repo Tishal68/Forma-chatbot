@@ -148,7 +148,7 @@ def test_error_formatting_edge_cases():
     # 3. Test 403 Forbidden
     resp_403 = httpx.Response(403, request=dummy_req, text='Forbidden')
     exc_403 = httpx.HTTPStatusError('403 Forbidden', request=dummy_req, response=resp_403)
-    msg_403 = format_error_message(exc_403, 'openrouter')
+    msg_403 = format_error_message(exc_403, 'groq')
     assert 'forbidden' in msg_403.lower()
 
     # 4. Test 413 Payload Too Large

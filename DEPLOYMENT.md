@@ -4,14 +4,13 @@ The Dockerfile builds React and serves it with FastAPI as **one web service**. N
 
 ## Before deploying: AI Providers
 
-Forma supports 5 AI inference providers:
+Forma supports 4 AI inference providers:
 - **Groq** (`GROQ_API_KEY`): Ultra-fast cloud inference (Llama 3.3 70B, DeepSeek R1 Distill). Recommended for quick, free-tier setup.
-- **OpenRouter** (`OPENROUTER_API_KEY`): Unified access to Claude 3.5 Sonnet, DeepSeek R1, Llama 3.3, and more.
 - **Google Gemini** (`GEMINI_API_KEY`): Gemini 2.0 Flash and Gemini 1.5 Pro via Google AI Studio.
 - **OpenAI** (`OPENAI_API_KEY`): GPT-4o, GPT-4o-mini, o3-mini.
 - **Ollama** (`OLLAMA_BASE_URL`): Self-hosted offline inference (e.g. `llama3.2`, `mistral`, `deepseek-r1`). **Ollama is completely optional.**
 
-At least one provider must be configured for production startup. When deploying to cloud environments like Render or Railway, you do **not** need to run or host an Ollama instance — simply configure one or more cloud API keys (`GROQ_API_KEY`, `OPENROUTER_API_KEY`, etc.) in your environment variables.
+At least one provider must be configured for production startup. When deploying to cloud environments like Render or Railway, you do **not** need to run or host an Ollama instance — simply configure one or more cloud API keys (`GROQ_API_KEY`, etc.) in your environment variables.
 
 All API keys remain strictly secure on the backend. The frontend queries `/api/models`, which checks server-side environment variables, probes provider health, and presents only configured, operational providers and models in the UI selector.
 
@@ -48,7 +47,7 @@ Public deployments are protected by multi-layered defenses:
 4. **OWASP Hardening Headers**:
    - Responses include `Content-Security-Policy`, `X-Frame-Options: DENY` (anti-clickjacking), `X-Content-Type-Options: nosniff`, `X-XSS-Protection: 1; mode=block`, and HSTS transport encryption in production.
 5. **API Key Confidentiality**:
-   - All AI keys (`GROQ_API_KEY`, `OPENROUTER_API_KEY`, etc.) remain strictly on the backend server and are never delivered to the client browser.
+   - All AI keys (`GROQ_API_KEY`, etc.) remain strictly on the backend server and are never delivered to the client browser.
 
 ## Render Deployment
 
@@ -57,7 +56,6 @@ Public deployments are protected by multi-layered defenses:
 3. In the Render service settings / environment variables:
    - Configure at least one AI provider variable:
      - `GROQ_API_KEY`: Ultra-fast & free at [console.groq.com/keys](https://console.groq.com/keys) (recommended)
-     - `OPENROUTER_API_KEY`: Multi-model access at [openrouter.ai/keys](https://openrouter.ai/keys)
      - `GEMINI_API_KEY`: Google AI Studio key at [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
      - `OPENAI_API_KEY`: OpenAI platform key at [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
      - `OLLAMA_BASE_URL`: Accessible remote Ollama server (optional, leave blank if using cloud keys).
@@ -80,7 +78,6 @@ DATABASE_PATH=/var/data/chat.db
 ATTACHMENTS_DIR=/var/data/attachments
 # Set at least one provider (cloud or Ollama):
 GROQ_API_KEY=gsk_...
-# OPENROUTER_API_KEY=sk-or-...
 # GEMINI_API_KEY=...
 # OPENAI_API_KEY=sk-proj-...
 # OLLAMA_BASE_URL=https://your-reachable-ollama-server.example

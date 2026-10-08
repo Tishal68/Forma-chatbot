@@ -23,10 +23,11 @@ const localWorkspace = ["localhost", "127.0.0.1", "[::1]"].includes(
 
 const defaultProviders: ProviderInfo[] = [
   { id: "groq", name: "Groq", tagline: "Lightning Fast", default_model: "openai/gpt-oss-120b" },
-  { id: "openrouter", name: "OpenRouter", tagline: "All Frontier Models", default_model: "openai/gpt-4o-mini" },
   { id: "gemini", name: "Google Gemini", tagline: "Next-Gen Multimodal", default_model: "gemini-flash-lite-latest" },
   { id: "ollama", name: "Ollama", tagline: "Local Offline", default_model: "llama3.2" },
 ];
+
+const supportedProviders = new Set(["auto", "groq", "gemini", "openai", "ollama"]);
 
 const safeStorage = {
   getItem: (key: string): string | null => {
@@ -65,7 +66,13 @@ export function App() {
 
   // Multi-provider state
   const [provider, setProvider] = useState<string>(
-    () => safeStorage.getItem("forma-provider") || "auto",
+    () => {
+      const saved = safeStorage.getItem("forma-provider") || "auto";
+      if (supportedProviders.has(saved)) return saved;
+      safeStorage.setItem("forma-provider", "auto");
+      safeStorage.setItem("forma-model", "auto");
+      return "auto";
+    },
   );
   const [providers, setProviders] = useState<ProviderInfo[]>(defaultProviders);
 

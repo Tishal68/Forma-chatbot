@@ -2,7 +2,6 @@
 
 Ollama's experimental v0.15 API emits image/completed/total via /api/generate.
 Newer builds may reject it; surface that error rather than fabricate an image.
-OpenRouter uses its dedicated /images endpoint and base64 response format.
 """
 import asyncio
 import base64
@@ -93,22 +92,6 @@ async def generate_image(client, provider, model, prompt, notify):
                         break
             if not complete or not encoded:
                 raise ValueError('Ollama did not return a completed image. Your server may not support image generation.')
-        elif provider == 'openrouter':
-            async with client.stream('POST', '/images', json={'model': model, 'prompt': prompt, 'n': 1}) as response:
-                response.raise_for_status()
-                chunks, size = [], 0
-                async for chunk in response.aiter_bytes():
-                    size += len(chunk)
-                    if size > MAX_RESPONSE_BYTES:
-                        raise ValueError('The image response is too large.')
-                    chunks.append(chunk)
-                payload = json.loads(b''.join(chunks))
-            if payload.get('error'):
-                raise ValueError('The image provider rejected this request. Try a different prompt or model.')
-            images = payload.get('data') or []
-            encoded = images[0].get('b64_json') if images else None
-            if not encoded:
-                raise ValueError('The provider returned no image. Try another prompt or model.')
         else:
             raise ValueError('This provider does not have an image-output adapter.')
     return decode_image(encoded)

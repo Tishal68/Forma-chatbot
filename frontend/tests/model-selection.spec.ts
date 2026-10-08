@@ -46,3 +46,22 @@ test('task menu shows verified choices and an honest unsupported state', async (
   await expect(page.getByRole('status')).toContainText('integration is required');
   await expect(page.locator('.model-item')).toHaveCount(0);
 });
+
+
+test('removed provider selection returns to Auto', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('forma-provider', 'openrouter');
+    localStorage.setItem('forma-model', 'openai/gpt-4o-mini');
+  });
+  await page.route('**/api/models?*', route => {
+    expect(new URL(route.request().url()).searchParams.has('provider')).toBe(false);
+    return route.fulfill({ json: { providers: [], models: [], model_details: [] } });
+  });
+  await page.route('**/api/conversations**', route => route.fulfill({ json: [] }));
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: /Select model: currently Auto/ })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('forma-provider'))).toBe('auto');
+  expect(await page.evaluate(() => localStorage.getItem('forma-model'))).toBe('auto');
+  await page.getByRole('button', { name: /Select model: currently/ }).click();
+  await expect(page.getByRole('menu').getByText('OpenRouter', { exact: true })).toHaveCount(0);
+});

@@ -6,7 +6,7 @@
 [![React](https://img.shields.io/badge/Frontend-React%20%2B%20TypeScript-61DAFB.svg?logo=react&logoColor=black)](https://react.dev)
 [![Multi-Model](https://img.shields.io/badge/Models-Groq%20%7C%20OpenAI%20%7C%20Gemini%20%7C%20Claude%20%7C%20Ollama-orange.svg)](README.md)
 
-A private, lightning-fast conversational AI workspace built with **React**, **TypeScript**, **FastAPI**, **SQLite**, supporting both **cloud frontier models** (Groq, OpenAI, Google Gemini, OpenRouter) and **100% offline local inference** (Ollama).
+A private, lightning-fast conversational AI workspace built with **React**, **TypeScript**, **FastAPI**, **SQLite**, supporting both **cloud frontier models** (Groq, OpenAI, Google Gemini) and **100% offline local inference** (Ollama).
 
 Experience instant token streaming (300+ tokens/sec on Groq), frontier reasoning, persistent context memory, and complete privacy control.
 
@@ -19,7 +19,6 @@ Experience instant token streaming (300+ tokens/sec on Groq), frontier reasoning
   - **Groq**: Llama 3.3 70B, DeepSeek R1 Distill 70B, Llama 3.1 8B (ultra-fast & free tier).
   - **OpenAI**: GPT-4o, GPT-4o-mini, o3-mini.
   - **Google Gemini**: Gemini 2.0 Flash, Gemini 1.5 Pro.
-  - **OpenRouter**: Claude 3.5 Sonnet, DeepSeek R1, Llama 3.3 70B.
   - **Ollama**: Local offline models (`llama3.2`, `deepseek-r1`, `qwen2.5`, `mistral`).
 - **🔒 Secure Server-Side Key Management**: API keys remain strictly secure on the backend (via `.env` or deployment secrets) and are never exposed to browser clients or leaked in error logs.
 - **🧠 Bounded Context Memory**: Rolling conversation summaries retain critical facts, requirements, and decisions while keeping prompt size optimal.
@@ -36,7 +35,7 @@ graph TD
     Client["Browser (React + TypeScript + Vite)"]
     FastAPI["Backend (FastAPI + Uvicorn)"]
     SQLite[("Persistent Storage (SQLite WAL)")]
-    CloudLLM["Cloud Inference (Groq / OpenAI / Gemini / OpenRouter)"]
+    CloudLLM["Cloud Inference (Groq / OpenAI / Gemini)"]
     LocalLLM["Local Inference (Ollama)"]
 
     Client -- "SSE Streaming & REST API" --> FastAPI
@@ -113,10 +112,9 @@ uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
 | **Groq** *(Recommended)* | `llama-3.3-70b-versatile`, `deepseek-r1-distill-llama-70b` | ⚡ 300+ tok/s | [Free Groq Key](https://console.groq.com/keys) |
 | **OpenAI** | `gpt-4o-mini`, `gpt-4o`, `o3-mini` | ⚡ Fast | [OpenAI Platform](https://platform.openai.com/api-keys) |
 | **Google Gemini** | `gemini-2.0-flash`, `gemini-1.5-pro` | ⚡ Blazing | [Google AI Studio](https://aistudio.google.com/app/apikey) |
-| **OpenRouter** | `anthropic/claude-3.5-sonnet`, `deepseek/deepseek-r1` | ⚡ Fast | [OpenRouter Keys](https://openrouter.ai/keys) |
 | **Ollama** | `llama3.2`, `mistral`, `qwen2.5-coder` | Depends on hardware | No key required (local) |
 
-Set your desired provider API keys (`GROQ_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY`, or `OPENAI_API_KEY`) in your server's `.env` file or cloud hosting environment settings. Forma's `/api/models` endpoint probes your configured providers and presents only operational models in the UI. Ollama is completely optional.
+Set your desired provider API keys (`GROQ_API_KEY`, `GEMINI_API_KEY`, or `OPENAI_API_KEY`) in your server's `.env` file or cloud hosting environment settings. Forma's `/api/models` endpoint probes your configured providers and presents only operational models in the UI. Ollama is completely optional.
 
 ---
 
@@ -129,7 +127,6 @@ Settings are configured via `.env` in the project root:
 | `GROQ_API_KEY` | *(empty)* | Optional API key for ultra-fast Groq inference. |
 | `OPENAI_API_KEY` | *(empty)* | Optional API key for OpenAI GPT models. |
 | `GEMINI_API_KEY` | *(empty)* | Optional API key for Google Gemini models. |
-| `OPENROUTER_API_KEY` | *(empty)* | Optional API key for OpenRouter (Claude, DeepSeek, etc.). |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Address of reachable Ollama instance. |
 | `OLLAMA_MODEL` | `llama3.2` | Default local LLM model identifier. |
 | `DATABASE_PATH` | `data/chat.db` | Location of SQLite database file. |
@@ -169,21 +166,20 @@ The model menu's **Choose by task** filter shows up to three currently eligible 
 
 Shortlists prefer different providers where possible. A feature with only one option is marked limited; no verified options means unavailable. A successful model-list request is not a guarantee of inference quota or future uptime. Provider errors are still handled at generation time.
 
-Ollama capabilities come from `/api/tags` or `/api/show`. OpenRouter input/output modalities and reasoning parameters come from its live model metadata. Cloud models without detailed capability discovery use the curated backend catalog intersected with the provider's current model list. See [Ollama model details](https://docs.ollama.com/api-reference/show-model-details) and [OpenRouter model metadata](https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties).
+Ollama capabilities come from `/api/tags` or `/api/show`. Cloud models without detailed capability discovery use the curated backend catalog intersected with the provider's current model list. See [Ollama model details](https://docs.ollama.com/api-reference/show-model-details).
 
-Documents use this app's text extraction, and web answers use this app's search pipeline. These are not claims of native PDF or web-browsing support. Image creation uses dedicated Ollama/OpenRouter adapters; vision-only models are never presented as image generators.
+Documents use this app's text extraction, and web answers use this app's search pipeline. These are not claims of native PDF or web-browsing support. Image creation uses the Ollama adapter; vision-only models are never presented as image generators.
 
 
 ### Creating images
 
 1. Open the model menu and choose **Image generation** under **Choose by task** to see models your connected services report.
 2. Select an image model, or select Auto and turn on **Create image** in the composer.
-3. Describe the desired image and send. Auto also recognizes explicit requests such as "Generate an image of a forest"; manually selected chat models are never overridden. Ollama progress is shown when the server supplies diffusion-step counts. OpenRouter requests show a generation indicator until the image is ready.
+3. Describe the desired image and send. Auto also recognizes explicit requests such as "Generate an image of a forest"; manually selected chat models are never overridden. Ollama progress is shown when the server supplies diffusion-step counts.
 4. Open or download the result from its image card. Images persist with the conversation in `ATTACHMENTS_DIR`; production needs a persistent volume. Stop cancels the upstream request, although cloud work already started may still incur charges.
 
 **Ollama:** the experimental `/api/generate` image protocol is supported (`image`, `completed`, `total`, `done`). Discovery recognizes Ollama's actual `image` capability, not the model name. Z-Image Turbo and FLUX.2 Klein are examples, but installing a model does not guarantee the server can run it. Ollama's [experimental announcement](https://ollama.com/blog/image-generation) documents macOS support; current upstream revisions can reject image generation. Connect `OLLAMA_BASE_URL` to a server/version that actually supports it. Do not point a hosted app at your laptop's localhost. Normal local Ollama needs no API key.
 
-**OpenRouter:** keep `OPENROUTER_API_KEY` on the backend. Forma discovers image models via `/images/models` and generates via `/images`, following the [dedicated image API](https://openrouter.ai/docs/guides/overview/multimodal/image-generation). Account credits, model access, and charges apply. A model being listed is not an inference-quota guarantee.
 
 Version 1 supports text-to-image raster output (PNG, JPEG, WebP), preview, download, stop, and regeneration of the original prompt. Image editing/reference uploads, SVG output, and video generation are not implemented. Turn off web search and remove attachments before creating an image. Image requests are not automatically retried after upstream failures, to avoid duplicate billed work. Manual model choices remain pinned.
 
@@ -257,3 +253,8 @@ reports that older turns are omitted while their originals remain in SQLite.
 Focused regression tests: `backend/tests/test_personalization_and_continuity.py`
 and `frontend/tests/personalization.spec.ts`. UI and backend provider responses
 are mocked; passing tests do not certify live inference quality or quota.
+
+Auto retries up to two compatible backups if a provider rejects the request,
+exceeds quota, times out, or fails before reply text is streamed. Manual selections
+stay pinned. Failures after partial output are reported without mixing answers
+from different models. Image creation currently requires a compatible Ollama server.

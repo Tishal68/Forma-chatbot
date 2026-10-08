@@ -30,7 +30,6 @@ def session(tmp_path, monkeypatch):
     monkeypatch.setenv('OUTPUT_TOKENS', '2048')
     monkeypatch.setenv('GROQ_API_KEY', 'mock')
     monkeypatch.setenv('GEMINI_API_KEY', 'mock')
-    monkeypatch.setenv('OPENROUTER_API_KEY', 'mock')
     details = [model_detail(name, {'capabilities': caps}, local=True) for name, caps in {
         'llama3.2': ['completion'], 'qwen2.5-coder': ['completion'],
         'deepseek-r1': ['completion', 'thinking'], 'custom-vision': ['completion', 'vision'],
@@ -171,7 +170,7 @@ def test_clear_all_clears_profile_even_with_no_chats(session):
 
 
 @pytest.mark.parametrize('provider,model', [('ollama','llama3.2'), ('groq','openai/gpt-oss-20b'),
-                                          ('gemini','gemini-flash-lite-latest'), ('openrouter','openai/gpt-4o-mini')])
+                                          ('gemini','gemini-flash-lite-latest')])
 def test_profile_prompt_consistent_across_adapters(session, monkeypatch, provider, model):
     client, calls = session
     monkeypatch.setattr(main, 'is_provider_configured', lambda p: True)

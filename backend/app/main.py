@@ -82,7 +82,7 @@ async def lifespan(app: FastAPI):
         if not configured_any:
             log.warning(
                 'Production warning: No AI provider is configured in environment. '
-                'Set GROQ_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY, OPENAI_API_KEY, or OLLAMA_BASE_URL to enable AI completions.'
+                'Set GROQ_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, or OLLAMA_BASE_URL to enable AI completions.'
             )
 
         # Validate that SESSION_SECRET is stable and persisted on /var/data before serving traffic
@@ -99,7 +99,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title='Forma local assistant',
-    description='Private AI conversational workspace supporting local Ollama, Groq, OpenAI, Gemini, and OpenRouter',
+    description='Private AI conversational workspace supporting local Ollama, Groq, OpenAI, and Gemini',
     lifespan=lifespan,
 )
 app.include_router(personalization_router)
@@ -281,9 +281,6 @@ def client(provider: str = 'groq') -> httpx.AsyncClient:
 
     token = get_api_key(provider)
     headers = {'Authorization': f'Bearer {token}'} if token else {}
-    if provider == 'openrouter':
-        headers['HTTP-Referer'] = 'https://forma.local'
-        headers['X-Title'] = 'Forma'
     return httpx.AsyncClient(
         base_url=base_url,
         headers=headers,
@@ -943,7 +940,7 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
         options = image_options(dict(zip(configured_providers, health_results)))
         option = next((o for o in options if is_auto or (o['provider'] == req_provider and o['model'] == req_model)), None)
         if not option:
-            raise HTTPException(status_code=400, detail='No compatible image generator is available for this selection. Choose an image-generation model or connect a supported Ollama/OpenRouter service.')
+            raise HTTPException(status_code=400, detail='No compatible image generator is available for this selection. Choose an image-generation model or connect a supported Ollama service.')
         provider, model = option['provider'], option['model']
         auto_explanation = option['reason'] if is_auto else ''
         pconfig = get_provider_config(provider)
@@ -1216,7 +1213,7 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
                                     })
                                 cloud_messages[-1]['content'] = multimodal_content
 
-                            # OpenAI-compatible streaming (Groq, Gemini, OpenRouter)
+                            # OpenAI-compatible streaming (Groq, Gemini, OpenAI)
                             async with c.stream(
                                 'POST',
                                 '/chat/completions',
