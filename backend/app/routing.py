@@ -55,7 +55,7 @@ def infer_task(content: str, history: list[dict] | None = None, summary: str = '
     return explicit_task(summary[:2000]) or 'everyday chat'
 
 
-SEARCH_REQUEST = re.compile(r'\b(?:search (?:the )?(?:web|net|internet|online)|look (?:it |this |that )?up|google it|verify|fact[- ]?check)\b', re.I)
+SEARCH_REQUEST = re.compile(r'\b(?:search (?:the )?(?:web|net|internet|online)|look (?:it |this |that )?up|google it|fact[- ]?check)\b', re.I)
 FRESH_INFO = re.compile(
     r'\b(?:today|tonight|yesterday|tomorrow|currently|current|latest|recent|now|'
     r'news|weather|forecast|stock price|share price|exchange rate|live score|'
@@ -67,6 +67,7 @@ FRESH_INFO = re.compile(
 def needs_web_search(content: str) -> bool:
     """Search for explicit verification and changing facts, including manual models."""
     text = content.strip()
+    # Explicit web requests win; generic "verify" also occurs in coding and maths.
     if SEARCH_REQUEST.search(text):
         return True
     # Creative requests and quoted/code content do not trigger background searches.
@@ -74,4 +75,19 @@ def needs_web_search(content: str) -> bool:
         return False
     if explicit_task(text) in ('coding', 'complex reasoning'):
         return bool(re.search(r'\b(?:latest|current version|recent release|today)\b', text, re.I))
+    if re.search(r'\bverify\b', text, re.I):
+        return True
+    if re.match(r'^(?:hi|hello|thanks?|thank you|okay|ok|continue|explain (?:it|that|this))\b', text, re.I) and len(text.split()) <= 6:
+        return False
     return bool(FRESH_INFO.search(text))
+
+
+def build_search_query(content: str, history: list[dict]) -> str:
+    query = content.strip()
+    verification = re.search(r'\b(?:search|verify|look up|fact[- ]?check)\b', query, re.I)
+    reference = re.search(r'\b(?:it|that|this|he|she|they|proper (?:reply|answer)|correct (?:reply|answer))\b', query, re.I)
+    if (verification and reference) or is_followup(query):
+        previous = [m['content'] for m in history[-12:] if m['role'] == 'user']
+        if previous:
+            return previous[-1][:600] + ' ' + query
+    return query

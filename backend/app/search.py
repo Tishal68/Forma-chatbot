@@ -57,14 +57,22 @@ class ResultParser(HTMLParser):
 
 def clean_results(results, max_results):
     cleaned, seen = [], set()
-    for result in results:
-        url = result.get('url', '')
-        parsed = urlparse(url)
+    for result in results if isinstance(results, list) else []:
+        if not isinstance(result, dict):
+            continue
+        url = result.get('url')
+        if not isinstance(url, str):
+            continue
+        try:
+            parsed = urlparse(url)
+        except ValueError:
+            continue
         if parsed.scheme not in ('http', 'https') or not parsed.netloc or url in seen:
             continue
         seen.add(url)
-        cleaned.append({'title': (result.get('title') or url).strip(), 'url': url,
-                        'snippet': (result.get('snippet') or '').strip()})
+        title, snippet = result.get('title'), result.get('snippet')
+        cleaned.append({'title': title.strip()[:500] if isinstance(title, str) and title.strip() else url,
+                        'url': url, 'snippet': snippet.strip()[:4000] if isinstance(snippet, str) else ''})
         if len(cleaned) >= max_results:
             break
     return cleaned

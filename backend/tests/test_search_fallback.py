@@ -77,3 +77,18 @@ def test_html_redirects_are_decoded_and_unsafe_urls_ignored():
     parser = search.ResultParser()
     parser.feed('<a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.org">News</a><a class="result__snippet">Latest update</a><a class="result__a" href="javascript:alert(1)">Bad</a>')
     assert search.clean_results(parser.results, 5) == [{'title': 'News', 'url': 'https://example.org', 'snippet': 'Latest update'}]
+
+
+def test_malformed_result_fields_are_ignored_or_normalized():
+    assert search.clean_results([None, {'url': None}, {'url': 'http://[bad'},
+                                 {'url': 'https://example.org', 'title': 42, 'snippet': []}], 5) == [
+        {'url': 'https://example.org', 'title': 'https://example.org', 'snippet': ''}]
+
+
+def test_malformed_api_results_do_not_prevent_fallback(monkeypatch):
+    monkeypatch.setenv('TAVILY_API_KEY', 'test')
+    async def malformed(*args): return [{'url': None}]
+    async def working(*args): return [{'title': 'News', 'url': 'https://example.org', 'snippet': ''}]
+    monkeypatch.setattr(search, 'search_tavily', malformed)
+    monkeypatch.setattr(search, 'search_duckduckgo', working)
+    assert asyncio.run(search.perform_search('news'))[0]['title'] == 'News'
