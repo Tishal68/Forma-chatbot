@@ -48,6 +48,8 @@ npm run dev
 
 Open http://127.0.0.1:5173.
 
+For more reliable web search, set `TAVILY_API_KEY` or `BRAVE_API_KEY` on the backend. Forma tries configured search APIs before DuckDuckGo and falls back when a service fails.
+
 ## Tests
 
 From the project folder:
