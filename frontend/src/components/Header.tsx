@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
+import { FormaMark } from "./FormaMark";
 import { createPortal } from "react-dom";
 import {
   Check,
@@ -398,7 +399,7 @@ export function Header({
       </div>
 
       <div className="mobile-header-brand" aria-hidden="true">
-        forma<span className="brand-dot">.</span>
+        <FormaMark /><span className="brand-copy"><span>forma<span className="brand-dot">.</span></span><small className="brand-tagline">Think it. Shape it.</small></span>
       </div>
 
       <div className="header-right">
