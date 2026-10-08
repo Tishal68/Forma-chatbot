@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import {
+  Bot,
   Check,
   ChevronDown,
   Code2,
@@ -14,6 +15,7 @@ import {
   Image as ImageIcon,
   Pencil,
   RotateCcw,
+  Terminal,
 } from "lucide-react";
 import type { Attachment, Message as MessageType } from "../types";
 
@@ -251,6 +253,47 @@ export const Message = memo(function Message({
           </small>
         )}
       </div>
+
+      {/* Collapsed Agent Reasoning & Tools Disclosure */}
+      {assistant && message.agent_steps && message.agent_steps.length > 0 && (
+        <details className="agent-steps-disclosure">
+          <summary className="agent-steps-summary">
+            <div className="agent-summary-title">
+              <Bot size={13} />
+              <span>
+                Agent Steps ({message.agent_steps.length}{" "}
+                {message.agent_steps.length === 1 ? "step" : "steps"})
+              </span>
+            </div>
+            <ChevronDown size={14} className="sources-caret" />
+          </summary>
+          <div className="agent-steps-content">
+            {message.agent_steps.map((st, i) => (
+              <div key={i} className="agent-step-item">
+                <div className="agent-step-header">
+                  <span className="agent-step-badge">Step {st.step}</span>
+                  {st.tool && (
+                    <span className="agent-step-tool">
+                      <Terminal size={11} />
+                      <span>{st.tool}</span>
+                    </span>
+                  )}
+                </div>
+                {st.thought && <p className="agent-step-thought">{st.thought}</p>}
+                {st.output && (
+                  <pre className="agent-step-output">
+                    <code>
+                      {typeof st.output === "string"
+                        ? st.output
+                        : JSON.stringify(st.output, null, 2)}
+                    </code>
+                  </pre>
+                )}
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
 
       {/* Collapsed Sources Disclosure below assistant responses */}
       {assistant && message.sources && message.sources.length > 0 && (

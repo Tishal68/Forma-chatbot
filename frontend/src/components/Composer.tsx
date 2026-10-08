@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from "react";
 import {
   ArrowDown,
   ArrowUpRight,
+  Bot,
   Check,
   ChevronDown,
   Code2,
@@ -46,6 +47,8 @@ interface ComposerProps {
   onRemoveAttachment: (id: string) => void;
   webSearch: boolean;
   onToggleWebSearch: () => void;
+  agentMode?: boolean;
+  onToggleAgentMode?: () => void;
   onOpenSettings: () => void;
 }
 
@@ -115,6 +118,8 @@ export function Composer({
   onRemoveAttachment,
   webSearch,
   onToggleWebSearch,
+  agentMode = false,
+  onToggleAgentMode,
 }: ComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const toolsMenuRef = useRef<HTMLDivElement>(null);
@@ -336,8 +341,21 @@ export function Composer({
         </div>
 
         {/* Active mode chips row */}
-        {(webSearch || imageMode) && (
+        {(webSearch || imageMode || agentMode) && (
           <div className="active-modes-row">
+            {agentMode && (
+              <button
+                type="button"
+                className="mode-chip"
+                onClick={onToggleAgentMode}
+                title="Agent mode enabled (click to remove)"
+                aria-label="Agent mode enabled"
+              >
+                <Bot size={13} />
+                <span>Agent mode</span>
+                <X size={12} />
+              </button>
+            )}
             {webSearch && (
               <button
                 type="button"
@@ -405,6 +423,24 @@ export function Composer({
 
               {toolsOpen && (
                 <div className="tools-menu-popover">
+                  <button
+                    type="button"
+                    className={`tools-menu-item ${agentMode ? "selected" : ""}`}
+                    disabled={imageMode}
+                    onClick={() => {
+                      onToggleAgentMode?.();
+                      setToolsOpen(false);
+                    }}
+                    aria-label="Agent mode"
+                  >
+                    <Bot size={15} />
+                    <div className="tools-menu-info">
+                      <strong>Agent mode</strong>
+                      <span>Autonomous multi-step reasoning & tool use</span>
+                    </div>
+                    {agentMode && <Check size={14} className="tools-check" />}
+                  </button>
+
                   <button
                     type="button"
                     className={`tools-menu-item ${webSearch ? "selected" : ""}`}

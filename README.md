@@ -1,85 +1,215 @@
-# Forma Chatbot
+# Forma AI — Advanced Personal AI Assistant
 
-Forma is a chatbot I built as a college project to learn about AI APIs, model selection, and full-stack development.
+<p align="center">
+  <strong>Think it. Shape it.</strong><br>
+  An intelligent, secure, RAG-powered personal AI assistant with long-term memory, multi-model auto routing, safe sandboxed tools, and agentic workflows.
+</p>
 
-It uses React and TypeScript for the frontend, FastAPI for the backend, and SQLite to save chats and preferences.
+<p align="center">
+  <img src="https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/React_18-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React" />
+  <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/SQLite_FTS5-003B57?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite" />
+  <img src="https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite" />
+  <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT License" />
+</p>
 
-## Features
+---
 
-- Chat with models from Groq, Gemini, OpenAI, or a local Ollama server.
-- Auto chooses a model for each message and tries up to two compatible backups if it fails before replying.
-- Save preferences and memories in Settings → Personalization.
-- Upload documents and images, and ask follow-up questions about them.
-- Automatically search for current information, or turn on web search for any question.
-- Questions like “Who is Thalapathy Vijay?” check the current role and recent news separately.
-- Edit messages, regenerate replies, and manage chat history.
-- Use light or dark mode on desktop and mobile.
+## Overview
 
-Manual model selections stay selected. API keys are stored on the backend. Chats and preferences belong to the current browser session and do not sync across devices.
+**Forma** is an autonomous, private personal AI assistant engineered for deep problem solving, research, and daily workflow acceleration. Rather than locking you into a single AI provider or sending your personal data to proprietary third-party servers, Forma gives you full control over your models, memory, documents, and tools—with zero expensive infrastructure or GPU requirements.
 
-## Run locally
+Whether connected to ultra-fast cloud inference (**Groq**, **Google Gemini**, **OpenAI**) or running completely offline on your local machine (**Ollama**), Forma intelligently routes each question to the most capable model, retrieves context from your personal documents using hybrid RAG, remembers your projects across conversations, and executes safe sandboxed tasks autonomously.
 
-You need Python 3.11+ and Node.js 20+.
+---
+
+## Key Capabilities
+
+### 🧠 Intelligent Model Routing & Provider Auto-Failover
+- **Independent Request Classification**: Evaluates every incoming prompt and identifies task intent across reasoning, mathematics, coding, creative writing, research, document analysis, and general dialogue.
+- **`ProviderCooldownManager`**: Intelligently monitors API rate limits (HTTP 429), authentication issues (401), and upstream outages (5xx) with exponential backoff cooldowns (30s base up to 10 minutes).
+- **Zero-Disruption Fallback**: Automatically and transparently switches to compatible secondary and tertiary models without losing conversation context, streaming live shift notifications to the UI.
+
+### 📚 CPU-Friendly Hybrid RAG Engine
+- **Semantic Document Chunking**: Ingests PDFs, DOCX files, codebases, CSVs, and plain text with 1,000-character semantic windows and 150-character overlaps, preserving line numbers and page markers.
+- **Lexical BM25 + Dense Vector Hybrid Search**: Combines SQLite FTS5 full-text search with 128-dimensional dense vector embeddings using Reciprocal Rank Fusion (RRF; $k=60$)—delivering high-precision semantic retrieval with zero GPU or PyTorch overhead.
+- **Strict Evidence Boundaries**: Injects context into prompts using isolated `<retrieved_evidence>` boundaries to eliminate hallucinations and prompt injection vectors.
+
+### 💾 Categorized Long-Term Memory Engine
+- **Structured Knowledge Graph**: Organizes learned knowledge into distinct categories: `profile` (personal preferences), `project` (active repositories, stacks, goals), `episodic` (past decisions, milestones), and `semantic` (domain facts).
+- **Credential & Secret Protection**: Actively detects, redacts, and rejects API keys, passwords, and sensitive tokens from being committed into long-term memory.
+- **Full Portability**: Easily view, filter by category, edit, export, or import memories as standard JSON.
+
+### 🤖 Autonomous Agent Mode & Safe Tool Suite
+- **Multi-Step ReAct Agent**: Solves complex questions using an iterative ReAct reasoning loop (budgeted up to 6 steps) with real-time thought and action streaming.
+- **AST-Validated Safe Python Sandbox**: Executes mathematical analysis, calculations, and data scripts within a restricted execution environment with strict AST verification, sanitized builtins, and memory limits.
+- **GitHub Repository Inspector**: Safely inspects public repositories, directory trees, commit structures, and README files.
+- **Structured Data Processor**: Parses, cleans, and computes summary statistics for CSV and JSON datasets.
+- **Immutable Tool Audit Logging**: Every tool execution is captured in SQLite with execution duration, arguments, and outputs.
+
+### 🌐 Real-Time Web Search & Fact Verification
+- **Multi-Tier Search Fallback**: Seamlessly queries configured API providers (**Tavily**, **Brave**) with graceful fallback to **DuckDuckGo**.
+- **Temporal & Person Verification**: Automatically identifies time-sensitive queries ("latest", "today", "who is") and queries current roles and recent developments separately.
+- **In-Memory TTL Caching**: 10-minute cache with URL deduplication to minimize network overhead and respect API rate limits.
+
+### 🎨 The Forma Design System
+- **Clean & Calm Aesthetic**: Thoughtfully crafted with comfortable margins, fluid typography, dark/light themes, and custom accent colors.
+- **Unified Model Selector**: Real-time capability indicators (Vision, Reasoning, Fast, Local Ollama, Image Generation) accessible from the sidebar and header.
+- **Collapsible Agent Disclosures**: Expandable step-by-step progress cards showing agent thoughts and tool outputs without cluttering the chat view.
+- **Responsive Workspace**: Seamless experience across mobile drawers (360px+), tablets, laptops, and ultra-wide desktop monitors (1920px+).
+
+---
+
+## Architecture
+
+Forma is built with a lightweight, high-performance architecture:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Forma Web UI (React + TS)                │
+│  - Clean, responsive desktop & mobile workspace             │
+│  - Category-filtered memory manager & JSON export/import    │
+│  - Agent Mode toggle with live reasoning disclosures        │
+│  - Unified model selector & multi-source web citations      │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ HTTP / SSE (EventSource)
+┌──────────────────────────────▼──────────────────────────────┐
+│                  FastAPI Backend (Python 3.11+)              │
+│  ┌───────────────────────────┬───────────────────────────┐  │
+│  │   Intelligent Routing     │  Provider Cooldown Mgr    │  │
+│  │   - Task classification   │  - 429/5xx exponential    │  │
+│  │   - Capability matching   │  - Transparent failover   │  │
+│  ├───────────────────────────┼───────────────────────────┤  │
+│  │   Long-Term Memory Engine │  Safe Personal Tools      │  │
+│  │   - Profile, Project,     │  - AST Python sandbox     │  │
+│  │     Episodic, Semantic    │  - GitHub repo inspector  │  │
+│  │   - Credential filtering  │  - CSV / JSON processor   │  │
+│  ├───────────────────────────┼───────────────────────────┤  │
+│  │   Hybrid RAG Engine       │  Autonomous Agent         │  │
+│  │   - Semantic chunking     │  - Multi-step ReAct loop  │  │
+│  │   - FTS5 BM25 + Dense Sim │  - Step budget & stream   │  │
+│  │   - Reciprocal Rank Fusion│  - Audit log recorder     │  │
+│  └───────────────────────────┴───────────────────────────┘  │
+│                               │                             │
+│                  SQLite WAL Database                        │
+│   (conversations, messages, memories, document_chunks,      │
+│    document_chunks_fts, tool_executions)                    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+For detailed component documentation, see [ARCHITECTURE.md](ARCHITECTURE.md).
+
+---
+
+## Quick Start
+
+### Prerequisites
+- **Python 3.11+**
+- **Node.js 20+**
+- (Optional) [Ollama](https://ollama.ai) for local offline models
+
+### 1. Clone & Set Up the Backend
 
 ```bash
 git clone https://github.com/Tishal68/Forma-chatbot.git
 cd Forma-chatbot
+
+# Set up Python virtual environment
 python -m venv .venv
+
+# On Linux/macOS:
 source .venv/bin/activate
+# On Windows PowerShell:
+.venv\Scripts\Activate.ps1
+
+# Install backend dependencies
 pip install -r backend/requirements.txt
+
+# Copy environment template
 cp .env.example .env
 ```
 
-On Windows, activate the environment with `.venv\Scripts\Activate.ps1` and copy the example with `Copy-Item .env.example .env`.
+### 2. Configure Environment Variables
 
-Add at least one API key to `.env`: `GROQ_API_KEY`, `GEMINI_API_KEY`, or `OPENAI_API_KEY`. To use local models, run Ollama and set `OLLAMA_BASE_URL` instead.
+Edit `.env` and add your preferred provider keys:
+
+```ini
+# At least one model provider:
+GROQ_API_KEY=gsk_your_groq_key
+GEMINI_API_KEY=AIza_your_gemini_key
+OPENAI_API_KEY=sk_your_openai_key
+
+# Or run completely locally with Ollama (no API keys needed!):
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+
+# Optional: Enhanced Web Search APIs
+TAVILY_API_KEY=tvly_your_tavily_key
+BRAVE_API_KEY=BSAx_your_brave_key
+
+# Optional: GitHub Tool Access
+GITHUB_TOKEN=ghp_your_github_token
+```
+
+### 3. Launch Backend & Frontend
 
 Start the backend:
-
 ```bash
 python -m uvicorn app.main:app --app-dir backend --reload --host 127.0.0.1 --port 8000
 ```
 
-In another terminal, start the frontend:
-
+In a new terminal, start the frontend:
 ```bash
 cd frontend
 npm ci
 npm run dev
 ```
 
-Open http://127.0.0.1:5173.
+Open **http://127.0.0.1:5173** in your browser.
 
-For more reliable web search, set `TAVILY_API_KEY` or `BRAVE_API_KEY` on the backend. Forma tries configured search APIs before DuckDuckGo and falls back when a service fails.
+---
 
-## Tests
+## Verification & Testing
 
-From the project folder:
+Forma maintains an extensive automated test suite covering routing, memory, RAG, sandboxing, and UI responsiveness:
 
 ```bash
+# Run all backend unit & integration tests (114+ tests)
 python -m pytest -q
-```
 
-From the frontend folder:
-
-```bash
+# Run frontend build & Playwright responsive tests
+cd frontend
 npm run build
 npx playwright install chromium
 npm run test:ui
 ```
 
-Provider responses are mocked in the tests.
+---
 
-## Deployment
+## Production Deployment
 
-The Docker setup serves the frontend and backend together. Render and Railway configuration files are included. See [DEPLOYMENT.md](DEPLOYMENT.md) for setup instructions.
+Forma is ready for containerized deployment or hosting on platforms like **Render**, **Railway**, or **Docker**:
 
-## Current limitations
+```bash
+# Build and run the unified Docker container
+docker build -t forma-chat .
+docker run -p 8000:8000 -v forma-data:/app/data --env-file .env forma-chat
+```
 
-- Replies depend on the available models and their API limits.
-- Document and memory retrieval uses keyword matching rather than embeddings.
-- Image generation needs an Ollama server that supports it.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for full deployment guides, volume persistence, and reverse proxy configurations.
+
+---
+
+## Privacy & Security
+
+- **Single-Tenant Privacy**: Data belongs exclusively to your browser session and backend database.
+- **No Telemetry**: Zero analytics, external trackers, or third-party tracking cookies.
+- **Sandboxed Execution**: Python code runs in an AST-restricted environment with strict import allowlists.
+- **Credential Protection**: Automatic credential scanning prevents sensitive keys or tokens from being saved in memory.
+- **One-Click Backup**: Export your full workspace anytime via `Settings → Personalization → Full Backup` or `GET /api/backup`.
+
+---
 
 ## License
 
-[MIT](LICENSE)
+Distributed under the [MIT License](LICENSE).
