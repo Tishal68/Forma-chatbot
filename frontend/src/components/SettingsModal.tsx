@@ -1,19 +1,23 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  AlertTriangle,
-  BookOpen,
-  CheckCircle2,
-  Lock,
-  Moon,
-  RefreshCw,
-  Sliders,
-  Sparkles,
-  Sun,
-  Trash2,
-  X,
+  AlertTriangle, BookOpen, CheckCircle2, Cpu, Database, Globe, Image as ImageIcon,
+  Info, Lock, Palette, RefreshCw, Settings, Sliders, Sparkles, Trash2, Wrench, X,
 } from "lucide-react";
 import { ModelDetail, ProviderInfo } from "../types";
 import { PersonalizationSettings } from "./PersonalizationSettings";
+
+type Tab = "general" | "models" | "memory" | "tools" | "appearance" | "privacy" | "advanced" | "about";
+type Accent = "purple" | "blue" | "teal";
+const navigation: { id: Tab; label: string; description: string; Icon: typeof Settings }[] = [
+  { id: "general", label: "General", description: "Shortcuts and preferences", Icon: Settings },
+  { id: "models", label: "Models", description: "Providers and diagnostics", Icon: Cpu },
+  { id: "memory", label: "Chat & Memory", description: "Personalization and context", Icon: Database },
+  { id: "tools", label: "Tools", description: "Available capabilities", Icon: Wrench },
+  { id: "appearance", label: "Appearance", description: "Theme and colours", Icon: Palette },
+  { id: "privacy", label: "Data & Privacy", description: "Your session and data", Icon: Lock },
+  { id: "advanced", label: "Advanced", description: "Generation settings", Icon: Sliders },
+  { id: "about", label: "About", description: "Project information", Icon: Info },
+];
 
 interface SettingsModalProps {
   open: boolean;
@@ -32,280 +36,258 @@ interface SettingsModalProps {
   temperature: number;
   onTemperatureChange: (temp: number) => void;
   onClearAll: () => void;
+  webSearch: boolean;
+  onWebSearchChange: (enabled: boolean) => void;
+  imageMode: boolean;
+}
+
+function storedChoice(key: string, allowed: string[], fallback: string): string {
+  try {
+    const value = localStorage.getItem(key);
+    return value && allowed.includes(value) ? value : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 export function SettingsModal({
-  open,
-  onClose,
-  theme,
-  onThemeChange,
-  provider,
-  providers,
-  onProviderChange,
-  model,
-  models,
-  modelDetails,
-  onModelChange,
-  busy,
-  onRefreshModels,
-  temperature,
-  onTemperatureChange,
-  onClearAll,
+  open, onClose, theme, onThemeChange, provider, providers, model, busy,
+  onRefreshModels, temperature, onTemperatureChange, onClearAll,
+  webSearch, onWebSearchChange, imageMode,
 }: SettingsModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const [activeTab, setActiveTab] = useState<"general" | "personalization" | "providers" | "guide" | "privacy">("general");
+  const [activeTab, setActiveTab] = useState<Tab>("general");
+  const [accent, setAccent] = useState<Accent>(() =>
+    storedChoice("forma-accent", ["purple", "blue", "teal"], "purple") as Accent
+  );
+  const [animations, setAnimations] = useState(
+    () => storedChoice("forma-animations", ["on", "off"], "on") === "on"
+  );
+  const [compact, setCompact] = useState(
+    () => storedChoice("forma-density", ["comfortable", "compact"], "comfortable") === "compact"
+  );
 
   useEffect(() => {
-    if (open) {
-      dialogRef.current?.showModal();
-    } else {
-      dialogRef.current?.close();
-    }
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (open && !dialog.open) dialog.showModal();
+    if (!open && dialog.open) dialog.close();
   }, [open]);
 
-  const currentProviderInfo = providers.find((p) => p.id === provider);
+  useEffect(() => {
+    document.documentElement.dataset.accent = accent;
+    document.documentElement.dataset.motion = animations ? "on" : "off";
+    document.documentElement.dataset.density = compact ? "compact" : "comfortable";
+    try {
+      localStorage.setItem("forma-accent", accent);
+      localStorage.setItem("forma-animations", animations ? "on" : "off");
+      localStorage.setItem("forma-density", compact ? "compact" : "comfortable");
+    } catch {
+      // Private browsing may block storage; the settings still work for this page.
+    }
+  }, [accent, animations, compact]);
 
+  const active = navigation.find((entry) => entry.id === activeTab)!;
   return (
     <dialog
       ref={dialogRef}
-      onCancel={onClose}
-      onClick={(e) => {
-        if (e.target === dialogRef.current) onClose();
-      }}
       className="settings-modal-dialog"
+      aria-label="Forma settings"
+      onCancel={onClose}
+      onClick={(event) => { if (event.target === dialogRef.current) onClose(); }}
     >
       <div className="modal-header">
-        <div>
-          <h2>Settings</h2>
-          <p>Make Forma yours. Manage your experience, models, and data.</p>
+        <div className="settings-heading">
+          <Settings size={23} aria-hidden="true" />
+          <div>
+            <h2>Settings</h2>
+            <p>Personalize your Forma experience.</p>
+          </div>
         </div>
-        <button
-          className="icon-button"
-          aria-label="Close settings"
-          onClick={onClose}
-        >
+        <button type="button" className="icon-button" aria-label="Close settings" onClick={onClose}>
           <X size={20} />
         </button>
       </div>
 
       <div className="settings-layout">
-      {/* Settings Navigation Tabs */}
-      <div className="settings-tabs" role="tablist">
-        <button type="button" role="tab" aria-selected={activeTab === "personalization"}
-          className={`settings-tab ${activeTab === "personalization" ? "active" : ""}`}
-          onClick={() => setActiveTab("personalization")}>
-          <Sparkles size={15} /><span>Chat & Memory</span>
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "general"}
-          className={`settings-tab ${activeTab === "general" ? "active" : ""}`}
-          onClick={() => setActiveTab("general")}
-        >
-          <Sliders size={15} />
-          <span>General</span>
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "providers"}
-          className={`settings-tab ${activeTab === "providers" ? "active" : ""}`}
-          onClick={() => setActiveTab("providers")}
-        >
-          <Sparkles size={15} />
-          <span>Models & Diagnostics</span>
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "guide"}
-          className={`settings-tab ${activeTab === "guide" ? "active" : ""}`}
-          onClick={() => setActiveTab("guide")}
-        >
-          <BookOpen size={15} />
-          <span>Guide</span>
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "privacy"}
-          className={`settings-tab ${activeTab === "privacy" ? "active" : ""}`}
-          onClick={() => setActiveTab("privacy")}
-        >
-          <Lock size={15} />
-          <span>Data & Privacy</span>
-        </button>
-      </div>
+        <nav className="settings-tabs" aria-label="Settings sections">
+          {navigation.map(({ id, label, description, Icon }) => (
+            <button
+              key={id}
+              type="button"
+              className={`settings-tab ${activeTab === id ? "active" : ""}`}
+              aria-current={activeTab === id ? "page" : undefined}
+              onClick={() => setActiveTab(id)}
+            >
+              <Icon size={17} aria-hidden="true" />
+              <span className="settings-tab-text">
+                <strong>{label}</strong>
+                <small>{description}</small>
+              </span>
+            </button>
+          ))}
+        </nav>
 
-      <div className="settings-tab-content">
-        <h3 className="settings-panel-heading">{({general:"General", personalization:"Chat & Memory", providers:"Models & Diagnostics", guide:"How to use Forma", privacy:"Data & Privacy"} as const)[activeTab]}</h3>
-        {open && activeTab === "personalization" && <PersonalizationSettings />}
-        {/* Tab 1: General */}
-        {activeTab === "general" && (
-          <div className="tab-pane">
-            <label className="setting">
-              Appearance
-              <select
-                aria-label="Theme"
-                value={theme}
-                onChange={(e) => onThemeChange(e.target.value)}
-              >
-                <option value="system">System preference</option>
-                <option value="light">Light</option>
-                <option value="dark">Dark</option>
-              </select>
-            </label>
+        <section className="settings-tab-content" aria-label={active.label}>
+          <div className="settings-section-title">
+            <h3 className="settings-panel-heading">{active.label}</h3>
+            <p>{active.description}</p>
+          </div>
 
-            <label className="setting temperature">
-              Creativity / Temperature <output>{temperature.toFixed(1)}</output>
-              <input
-                aria-label="Temperature"
-                type="range"
-                min="0"
-                max="2"
-                step="0.1"
-                value={temperature}
-                onChange={(e) => onTemperatureChange(Number(e.target.value))}
-              />
-              <small>Lower (0.0 – 0.4) for coding and factual queries. Higher (0.7 – 1.0) for brainstorming.</small>
-            </label>
-
-            <div className="keyboard-shortcuts-box">
-              <h4>Keyboard Shortcuts</h4>
-              <div className="shortcut-row">
-                <span>New chat</span>
-                <kbd>Ctrl + Shift + O</kbd>
+          {activeTab === "general" && (
+            <div className="tab-pane">
+              <div className="settings-panel-card">
+                <h4>How Forma works</h4>
+                <p>Auto chooses a compatible available model for each message. You can change the model beside your chat search field, or in the header when the sidebar is closed.</p>
               </div>
-              <div className="shortcut-row">
-                <span>Find in conversations</span>
-                <kbd>Ctrl + K</kbd>
-              </div>
-              <div className="shortcut-row">
-                <span>Send message</span>
-                <kbd>Enter</kbd>
-              </div>
-              <div className="shortcut-row">
-                <span>New line in composer</span>
-                <kbd>Shift + Enter</kbd>
+              <div className="keyboard-shortcuts-box">
+                <h4>Keyboard shortcuts</h4>
+                <div className="shortcut-row"><span>New chat</span><kbd>Ctrl + Shift + O</kbd></div>
+                <div className="shortcut-row"><span>Search conversations</span><kbd>Ctrl + K</kbd></div>
+                <div className="shortcut-row"><span>Send message</span><kbd>Enter</kbd></div>
+                <div className="shortcut-row"><span>New line</span><kbd>Shift + Enter</kbd></div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Tab 2: Providers & Diagnostics */}
-        {activeTab === "providers" && (
-          <div className="tab-pane">
-            <div className="providers-list-container">
-              {providers.map((p) => (
-                <div key={p.id} className="provider-status-card">
-                  <div className="provider-card-header">
-                    <div>
-                      <strong>{p.name}</strong>
-                      {p.tagline && <span className="provider-card-tagline"> · {p.tagline}</span>}
+          {activeTab === "models" && (
+            <div className="tab-pane">
+              <div className="settings-panel-card">
+                <div className="settings-status-title">
+                  <div><h4>Model selection</h4><p>Currently selected: <strong>{provider === "auto" || model === "auto" ? "Auto" : model}</strong></p></div>
+                  <Sparkles size={19} aria-hidden="true" />
+                </div>
+                <p>Choose a model with the sidebar selector. Unavailable providers are shown below for troubleshooting.</p>
+              </div>
+              <div className="providers-list-container">
+                {providers.map((p) => (
+                  <div key={p.id} className="provider-status-card">
+                    <div className="provider-card-header">
+                      <div><strong>{p.name}</strong>{p.tagline && <span className="provider-card-tagline"> · {p.tagline}</span>}</div>
+                      {p.working ? <span className="provider-badge-ok"><CheckCircle2 size={13} /> Available</span>
+                        : <span className="provider-badge-error"><AlertTriangle size={13} /> {p.status || "Not configured"}</span>}
                     </div>
-                    {p.working ? (
-                      <span className="provider-badge-ok">
-                        <CheckCircle2 size={13} /> Active
-                      </span>
-                    ) : (
-                      <span className="provider-badge-error">
-                        <AlertTriangle size={13} /> {p.status || "Not configured"}
-                      </span>
+                    {p.error && <p className="provider-error-detail">{p.error}</p>}
+                    {p.models && p.models.length > 0 && (
+                      <div className="provider-models-chips">
+                        {p.models.map((m) => <span key={m.id} className="model-chip" title={m.description}>{m.name}</span>)}
+                      </div>
                     )}
                   </div>
-                  {p.error && (
-                    <div className="provider-error-detail">
-                      {p.error}
-                    </div>
-                  )}
-                  {p.models && p.models.length > 0 && (
-                    <div className="provider-models-chips">
-                      {p.models.map((m) => (
-                        <span key={m.id} className="model-chip" title={m.description}>
-                          {m.name}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            <div style={{ marginTop: "16px" }}>
-              <button
-                type="button"
-                className="quiet refresh-models"
-                onClick={onRefreshModels}
-                disabled={busy}
-                style={{ width: "100%", justifyContent: "center" }}
-              >
-                <RefreshCw size={14} /> Refresh connection & status
+                ))}
+              </div>
+              <button type="button" className="quiet refresh-models" onClick={onRefreshModels} disabled={busy}>
+                <RefreshCw size={15} /> Refresh connections
               </button>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Tab 3: Quick Guide */}
-        {activeTab === "guide" && (
-          <div className="tab-pane">
-            <ol className="guide-steps">
-              <li>
-                <strong>Start with a question or task</strong>
-                <p>
-                  Type your prompt, attach files (PDF, DOCX, CSV, TXT, code, images), or toggle Web Search for live internet information.
-                </p>
-              </li>
-              <li>
-                <strong>Auto Smart Model Routing</strong>
-                <p>
-                  Forma automatically routes your prompt to the best configured model: vision-capable models for images, deep reasoning for coding/math, or fast conversational models for quick questions.
-                </p>
-              </li>
-              <li>
-                <strong>Follow up naturally</strong>
-                <p>
-                  Forma uses recent context to understand follow-ups and reselects a model for each message in Auto. Save preferences and memories in Personalization to use them across chats in this browser.
-                </p>
-              </li>
-            </ol>
-          </div>
-        )}
+          {activeTab === "memory" && <div className="tab-pane">{open && <PersonalizationSettings />}</div>}
 
-        {/* Tab 4: Privacy & Data */}
-        {activeTab === "privacy" && (
-          <div className="tab-pane">
-            <div className="privacy-info-box">
-              <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
-                <Lock size={18} style={{ color: "var(--accent)", flexShrink: 0, marginTop: "2px" }} />
+          {activeTab === "tools" && (
+            <div className="tab-pane">
+              <div className="settings-panel-card settings-tool-row">
+                <Globe size={19} aria-hidden="true" />
+                <div><h4>Web search</h4><p>Use internet search for responses when enabled. Forma may also search automatically for changing facts.</p></div>
+                <label className="settings-switch">
+                  <input type="checkbox" aria-label="Enable web search for next messages" checked={webSearch}
+                    onChange={(e) => onWebSearchChange(e.target.checked)} />
+                  <span aria-hidden="true" />
+                </label>
+              </div>
+              <div className="settings-panel-card settings-tool-row">
+                <ImageIcon size={19} aria-hidden="true" />
+                <div><h4>Image generation</h4><p>{imageMode ? "Image mode is currently active." : "Enable image creation from the chat Tools menu when a supported provider is configured."}</p></div>
+              </div>
+              <div className="settings-panel-card settings-tool-row">
+                <BookOpen size={19} aria-hidden="true" />
+                <div><h4>File analysis</h4><p>Attach supported documents or images using the + button in the composer.</p></div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "appearance" && (
+            <div className="tab-pane">
+              <div className="settings-panel-card">
+                <h4>Theme</h4>
+                <div className="settings-segmented" role="group" aria-label="Theme">
+                  {(["dark", "light", "system"] as const).map((value) =>
+                    <button key={value} type="button" className={theme === value ? "active" : ""}
+                      aria-pressed={theme === value} onClick={() => onThemeChange(value)}>
+                      {value === "dark" ? "Dark" : value === "light" ? "Light" : "System"}
+                    </button>)}
+                </div>
+              </div>
+              <div className="settings-panel-card">
+                <h4>Accent colour</h4>
+                <p>A subtle highlight for buttons, selected items and focus states.</p>
+                <div className="settings-colours" role="group" aria-label="Accent colour">
+                  {(["purple", "blue", "teal"] as const).map((value) => (
+                    <button key={value} type="button" aria-label={value + " accent"}
+                      aria-pressed={accent === value} className={`accent-choice ${value} ${accent === value ? "selected" : ""}`}
+                      onClick={() => setAccent(value)} />
+                  ))}
+                </div>
+              </div>
+              <div className="settings-panel-card settings-preference-row">
+                <div><h4>Compact spacing</h4><p>Fit a little more content on screen.</p></div>
+                <label className="settings-switch"><input type="checkbox" checked={compact}
+                  aria-label="Compact spacing" onChange={(e) => setCompact(e.target.checked)} /><span aria-hidden="true" /></label>
+              </div>
+              <div className="settings-panel-card settings-preference-row">
+                <div><h4>Interface animations</h4><p>Gentle transitions; system reduced-motion setting is always respected.</p></div>
+                <label className="settings-switch"><input type="checkbox" checked={animations}
+                  aria-label="Interface animations" onChange={(e) => setAnimations(e.target.checked)} /><span aria-hidden="true" /></label>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "privacy" && (
+            <div className="tab-pane">
+              <div className="settings-panel-card">
+                <h4><Lock size={16} aria-hidden="true" /> Browser session</h4>
+                <p>Your conversations and preferences are associated with this browser session and do not automatically sync across devices. Clearing cookies or site data may make your previous session inaccessible.</p>
+              </div>
+              <div className="danger-zone">
                 <div>
-                  <strong>Anonymous Visitor Isolation</strong>
-                  <p style={{ margin: "4px 0 0", fontSize: "12px", color: "var(--muted)", lineHeight: "1.5" }}>
-                    Your conversations, attachments, and searches are isolated under a secure, server-signed session cookie. No other visitor can access or view your chats. Clearing your cookies or site data resets this session.
-                  </p>
+                  <strong>Delete conversations and personalization</strong>
+                  <p>Remove your chats, attachments, custom instructions, preferences, and memories for this session. This action cannot be undone.</p>
                 </div>
+                <button type="button" disabled={busy} className="danger-button" onClick={onClearAll}>
+                  <Trash2 size={16} /> Delete all data
+                </button>
               </div>
             </div>
+          )}
 
-            <div className="danger-zone" style={{ marginTop: "24px" }}>
-              <div>
-                <strong>Clear all conversations and personalization</strong>
-                <p>Permanently remove all chats, uploaded files, saved preferences, custom instructions, and memories for this session.</p>
+          {activeTab === "advanced" && (
+            <div className="tab-pane">
+              <div className="settings-panel-card">
+                <label className="setting temperature">
+                  <span>Creativity / temperature <output>{temperature.toFixed(1)}</output></span>
+                  <input aria-label="Temperature" type="range" min="0" max="2" step="0.1"
+                    value={temperature} onChange={(e) => onTemperatureChange(Number(e.target.value))} />
+                </label>
+                <p>Lower values favour consistency. Higher values introduce more variation, depending on the provider and model.</p>
               </div>
-              <button
-                disabled={busy}
-                className="danger-button"
-                onClick={() => {
-                  onClearAll();
-                  onClose();
-                }}
-              >
-                <Trash2 size={16} /> Clear all chats
-              </button>
+              <div className="settings-panel-card"><h4>Model diagnostics</h4><p>Check provider availability and supported models in the Models section. Model failover is handled by the backend in Auto mode.</p></div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+
+          {activeTab === "about" && (
+            <div className="tab-pane">
+              <div className="settings-panel-card">
+                <h4>Forma AI</h4>
+                <p>A personal AI chatbot built as a college project using React, TypeScript, FastAPI and SQLite.</p>
+                <p>Supports multiple hosted AI providers and optional local models through Ollama.</p>
+                <a className="settings-about-link" href="https://github.com/Tishal68/Forma-chatbot" target="_blank" rel="noopener noreferrer">
+                  View project on GitHub
+                </a>
+              </div>
+              <div className="settings-panel-card"><h4>About model output</h4><p>AI-generated answers may be incorrect. Check important facts and the sources used.</p></div>
+            </div>
+          )}
+        </section>
       </div>
     </dialog>
   );
