@@ -52,7 +52,7 @@ for (const width of [1440, 768, 390]) {
     await expect(page.getByText('Selected for image generation.', {exact:true})).toBeVisible();
     expect(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.getByRole('button',{name:/Select model: currently/}).click();
-    await expect(page.getByLabel('Choose by task')).toBeVisible();
+    await expect(page.getByRole('dialog')).toBeVisible();
     expect(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.keyboard.press('Escape');
     await page.screenshot({path:`test-results/image-ui-${width}.png`});

@@ -24,18 +24,13 @@ for (const width of [360, 390, 768, 1024, 1366, 1920]) {
     expect(bounds!.x).toBeGreaterThanOrEqual(0);
     expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
     await page.screenshot({path: `test-results/welcome-${width}.png`});
-    if (width <= 800) await page.getByRole('button', {name: 'Open sidebar', exact: true}).click();
     const selector = page.getByRole('button', {name: /Select model: currently/});
     await expect(selector).toHaveCount(1);
     await selector.click();
-    const menu = page.getByRole('menu');
-    await expect(menu).toBeVisible();
-    const menuBounds = await menu.boundingBox();
-    expect(menuBounds!.x).toBeGreaterThanOrEqual(0);
-    expect(menuBounds!.x + menuBounds!.width).toBeLessThanOrEqual(width);
-    expect(menuBounds!.y + menuBounds!.height).toBeLessThanOrEqual(844);
-    await page.screenshot({path: `test-results/model-menu-${width}.png`});
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
     await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
     if (width <= 800) {
       const open = page.getByRole('button', {name: 'Open sidebar', exact: true});
       if (await open.isVisible()) await open.click();

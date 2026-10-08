@@ -18,6 +18,7 @@ const navigation: { id: Tab; label: string; description: string; Icon: typeof Se
 
 interface SettingsModalProps {
   open: boolean;
+  initialTab?: Tab;
   onClose: () => void;
   theme: string;
   onThemeChange: (theme: string) => void;
@@ -49,12 +50,18 @@ function storedChoice(key: string, allowed: string[], fallback: string): string 
 }
 
 export function SettingsModal({
-  open, onClose, theme, onThemeChange, provider, providers, model, busy,
+  open, initialTab, onClose, theme, onThemeChange, provider, providers, model, busy,
   onRefreshModels, temperature, onTemperatureChange, onClearAll,
   webSearch, onWebSearchChange, imageMode, onSelectModel,
 }: SettingsModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const [activeTab, setActiveTab] = useState<Tab>("general");
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab || "general");
+
+  useEffect(() => {
+    if (open && initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [open, initialTab]);
   const [accent, setAccent] = useState<Accent>(() =>
     storedChoice("forma-accent", ["purple", "blue", "teal"], "purple") as Accent
   );

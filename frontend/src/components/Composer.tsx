@@ -197,16 +197,16 @@ export function Composer({
           <div>
             <strong>
               {checking
-                ? "Checking server models…"
+                ? "Connecting to models…"
                 : connected
-                  ? "Choose your AI model"
+                  ? "Forma is ready"
                   : "Let’s connect your assistant"}
             </strong>
             <p>
               {checking
-                ? "Connecting to configured AI providers."
+                ? "Checking configured AI providers."
                 : connected
-                  ? "Select a model or keep Auto to begin chatting."
+                  ? "Forma automatically chooses the best available model for your request."
                   : localWorkspace
                     ? "Start Ollama or configure a cloud provider key in backend environment."
                     : "Configure at least one AI provider in your deployment settings."}
@@ -216,7 +216,7 @@ export function Composer({
             disabled={checking}
             onClick={connected ? onOpenHelp : onCheckConnection}
           >
-            {checking ? "Checking…" : "Setup"}
+            {checking ? "Checking…" : connected ? "Settings" : "Setup"}
           </button>
         </div>
       )}

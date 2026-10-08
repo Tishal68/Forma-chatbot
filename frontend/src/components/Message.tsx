@@ -364,33 +364,40 @@ export const Message = memo(function Message({
           </button>
         )}
 
-        {/* Model attribution & why this model */}
+        {/* Model attribution & progressive disclosure */}
         {assistant && message.model && (
           <div className="message-model-info">
             {message.auto_reason ? (
               <details className="routing-note">
                 <summary>
                   <span className="routing-summary-label">
-                    Auto · {message.auto_reason.replace(/\.*$/, "")}
+                    Auto · {message.auto_reason ? message.auto_reason.replace(/\.*$/, "") : "Best match for this request"}
                   </span>
                   <span className="why-link">Why this model?</span>
-                  <span className="message-model-name-badge">
-                    <span className="message-model-name">{rawModelName}</span>
-                  </span>
                 </summary>
                 <div className="routing-explanation">
+                  <p>
+                    <strong>Selected model:</strong>{" "}
+                    <span className="message-model-name">{rawModelName}</span>
+                  </p>
                   <p>{message.auto_reason}</p>
                 </div>
               </details>
             ) : (
               <div className="manual-model-info">
-                <span className="message-model-name">{rawModelName}</span>
                 <details className="routing-note manual-note">
                   <summary>
+                    <span className="routing-summary-label manual">
+                      Manual model selection
+                    </span>
                     <span className="why-link">Why this model?</span>
                   </summary>
                   <div className="routing-explanation">
-                    <p>Manually chosen model ({rawModelName}).</p>
+                    <p>
+                      <strong>Selected model:</strong>{" "}
+                      <span className="message-model-name">{rawModelName}</span>
+                    </p>
+                    <p>Manually chosen in Settings.</p>
                   </div>
                 </details>
               </div>

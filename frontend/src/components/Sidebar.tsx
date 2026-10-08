@@ -105,25 +105,24 @@ export function Sidebar({
         </button>
 
         <div className="sidebar-search-row">
-        <div className="search">
-          <Search size={15} />
-          <input
-            aria-label="Search conversations"
-            placeholder="Search chats…"
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-          />
-          {search && (
-            <button
-              className="clear-search"
-              aria-label="Clear search"
-              onClick={() => onSearchChange("")}
-            >
-              <X size={14} />
-            </button>
-          )}
-        </div>
-          <div className="sidebar-model-slot" id="sidebar-model-selector" aria-label="Model selection" />
+          <div className="search">
+            <Search size={15} />
+            <input
+              aria-label="Search conversations"
+              placeholder="Search chats…"
+              value={search}
+              onChange={(e) => onSearchChange(e.target.value)}
+            />
+            {search && (
+              <button
+                className="clear-search"
+                aria-label="Clear search"
+                onClick={() => onSearchChange("")}
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
         </div>
 
         <nav className="history" aria-label="Conversation history">

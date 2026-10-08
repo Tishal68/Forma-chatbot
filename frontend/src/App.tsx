@@ -63,6 +63,12 @@ export function App() {
   const [search, setSearch] = useState("");
   const [sidebar, setSidebar] = useState(window.innerWidth > 800);
   const [settings, setSettings] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<"general" | "memory" | "appearance" | "advanced">("general");
+
+  const openSettings = useCallback((tab: "general" | "memory" | "appearance" | "advanced" = "general") => {
+    setSettingsTab(tab);
+    setSettings(true);
+  }, []);
 
   // Multi-provider state
   const [provider, setProvider] = useState<string>(
@@ -723,8 +729,8 @@ export function App() {
         connected={connected}
         checking={checking}
         ready={ready}
-        onOpenSettings={() => setSettings(true)}
-        onOpenHelp={() => setHelp(true)}
+        onOpenSettings={() => openSettings("general")}
+        onOpenHelp={() => openSettings("general")}
       />
 
       <main>
@@ -740,7 +746,6 @@ export function App() {
           model={model}
           models={models}
           modelDetails={modelDetails}
-          featureCoverage={featureCoverage}
           busy={busy}
           onModelChange={setModel}
           onSelectModel={handleSelectModel}
@@ -749,6 +754,7 @@ export function App() {
             const chat = chats.find((c) => c.id === id);
             if (chat) renameChat(chat);
           }}
+          onOpenSettings={openSettings}
           theme={theme}
           onToggleTheme={toggleTheme}
           onExportChat={exportChat}
@@ -849,7 +855,7 @@ export function App() {
           onToggleWebSearch={() => setWebSearch(!webSearch)}
           agentMode={agentMode}
           onToggleAgentMode={() => setAgentMode(!agentMode)}
-          onOpenSettings={() => setSettings(true)}
+          onOpenSettings={() => openSettings("general")}
         />
       </main>
 
@@ -857,6 +863,7 @@ export function App() {
 
       <SettingsModal
         open={settings}
+        initialTab={settingsTab}
         onClose={() => setSettings(false)}
         theme={theme}
         onThemeChange={setTheme}
