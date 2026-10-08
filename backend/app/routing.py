@@ -16,6 +16,8 @@ CODE = re.compile(
     r'\b(?:write|implement|debug|refactor|create|test)\s+(?:an?\s+)?(?:function|program|class)\b', re.I)
 NON_CODE = re.compile(r'\b(?:dress|postal|zip|verification|access|area|country|discount|coupon|morse)\s+code\b', re.I)
 REASONING = re.compile(r'\b(?:prove|proof|derive|theorem|calculate|math(?:s|ematics)?|equation|integral|derivative|reasoning|step by step)\b', re.I)
+MATHEMATICS = re.compile(r'\b(?:calculate|algebra|calculus|equation|integral|derivative|arithmetic|formula|matrix|matrices|geometry|trigonometry|logarithm|summation|polynomial)\b|\b\d+\s*[\+\-\*/\^]\s*\d+', re.I)
+RESEARCH = re.compile(r'\b(?:deep research|literature review|comprehensive analysis|survey of|comparative study|scholarly|academic research|state of the art|historical overview)\b', re.I)
 WRITING = re.compile(r'\b(?:write|draft|compose|rewrite)\b.*\b(?:email|letter|story|poem|essay|chapter|message|post)\b', re.I)
 
 
@@ -32,6 +34,10 @@ def explicit_task(content: str) -> str | None:
         return 'coding'
     if WRITING.search(text):
         return 'writing'
+    if RESEARCH.search(text):
+        return 'research'
+    if MATHEMATICS.search(text):
+        return 'complex reasoning'
     return None
 
 

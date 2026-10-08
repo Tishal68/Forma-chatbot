@@ -33,8 +33,12 @@ from .providers import (
     get_provider_config,
     is_provider_configured,
     probe_provider_health,
+    record_provider_failure,
+    record_provider_success,
 )
+from .agent import run_agent_workflow
 from .image_output import generate_image, save_image
+from .rag import delete_attachment_chunks, format_rag_context, hybrid_search, index_attachment
 from .search import SearchError, format_search_context, perform_search
 from .security import (
     apply_security_headers,
@@ -699,6 +703,12 @@ async def upload_attachment(cid: str, request: Request, file: UploadFile = File(
             ),
         )
 
+    if not is_image and extracted_text:
+        try:
+            index_attachment(aid, cid, visitor_id, safe_name, extracted_text)
+        except Exception as exc:
+            log.warning('RAG indexing failed for attachment %s: %s', aid, exc)
+
     return {
         'id': aid,
         'conversation_id': cid,
@@ -708,6 +718,59 @@ async def upload_attachment(cid: str, request: Request, file: UploadFile = File(
         'page_count': page_count,
         'is_image': is_image,
         'created_at': stamp,
+    }
+
+
+@app.get('/api/conversations/{cid}/rag/search')
+async def search_conversation_documents(cid: str, query: str, request: Request, top_k: int = 5):
+    """Search uploaded conversation documents using hybrid BM25 + dense vector search."""
+    visitor_id = request.state.visitor_id
+    get_conversation_or_404(cid, visitor_id)
+    return hybrid_search(visitor_id, query, conversation_id=cid, top_k=top_k)
+
+
+@app.get('/api/conversations/{cid}/tools/audit')
+async def get_conversation_tool_audit(cid: str, request: Request):
+    """Retrieve tool execution audit logs for a conversation."""
+    visitor_id = request.state.visitor_id
+    get_conversation_or_404(cid, visitor_id)
+    with connect() as db:
+        rows = db.execute(
+            '''
+            SELECT id, message_id, tool_name, input_args, output_summary,
+                   duration_ms, status, created_at
+            FROM tool_executions
+            WHERE conversation_id = ? AND visitor_id = ?
+            ORDER BY created_at ASC
+            ''',
+            (cid, visitor_id)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+@app.get('/api/backup')
+async def export_workspace_backup(request: Request):
+    """Generate complete workspace data backup export for the current visitor."""
+    visitor_id = request.state.visitor_id
+    with connect() as db:
+        convs = [dict(r) for r in db.execute('SELECT * FROM conversations WHERE visitor_id = ?', (visitor_id,)).fetchall()]
+        conv_ids = [c['id'] for c in convs]
+        if conv_ids:
+            placeholders = ','.join('?' * len(conv_ids))
+            msgs = [dict(r) for r in db.execute(f'SELECT * FROM messages WHERE conversation_id IN ({placeholders})', conv_ids).fetchall()]
+            atts = [dict(r) for r in db.execute(f'SELECT id, conversation_id, filename, content_type, size_bytes, created_at FROM attachments WHERE conversation_id IN ({placeholders})', conv_ids).fetchall()]
+        else:
+            msgs, atts = [], []
+        profile = get_profile(visitor_id)
+
+    return {
+        'version': '1.0',
+        'exported_at': now(),
+        'visitor_id': visitor_id,
+        'profile': profile,
+        'conversations': convs,
+        'messages': msgs,
+        'attachments': atts,
     }
 
 
@@ -804,6 +867,7 @@ class ChatPayload(BaseModel):
     edit_message_id: int | None = None
     attachment_ids: list[str] = Field(default_factory=list)
     web_search: bool = False
+    agent_mode: bool = False
     output_mode: Literal["chat", "image"] = "chat"
 
 
@@ -1167,6 +1231,24 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
 
                 try:
                     async with client_instance as c:
+                        if body.agent_mode:
+                            text = await run_agent_workflow(
+                                client=c,
+                                provider=curr_provider,
+                                model=curr_model,
+                                user_prompt=user_text or body.content,
+                                visitor_id=visitor_id,
+                                conversation_id=cid,
+                                message_id=mid,
+                                emit_fn=emit,
+                                is_openai_format=curr_is_cloud,
+                            )
+                            for chunk in [text[i:i+50] for i in range(0, len(text), 50)]:
+                                await emit('token', content=chunk)
+                                await asyncio.sleep(0.01)
+                            status = 'complete'
+                            record_provider_success(curr_provider)
+                            break
                         if output_image:
                             await emit('status', message='Creating your image…')
                             async def image_progress(message):
@@ -1302,12 +1384,16 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
                                 raise ValueError('The model connection closed early. You can retry this response.')
 
                         # Generation completed successfully
+                        record_provider_success(curr_provider)
                         break
 
                 except asyncio.CancelledError:
                     status = 'stopped'
                     break
                 except Exception as exc:
+                    status_code = getattr(getattr(exc, 'response', None), 'status_code', None)
+                    reason = 'rate_limit' if status_code == 429 else 'auth_failure' if status_code in (401, 403) else 'server_error'
+                    record_provider_failure(curr_provider, reason, str(exc), status_code=status_code)
                     if text:
                         # Tokens were already streamed; do not restart mid-sentence
                         status = 'error'

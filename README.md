@@ -6,14 +6,15 @@ It uses React and TypeScript for the frontend, FastAPI for the backend, and SQLi
 
 ## Features
 
-- Chat with models from Groq, Gemini, OpenAI, or a local Ollama server.
-- Auto chooses a model for each message and tries up to two compatible backups if it fails before replying.
-- Save preferences and memories in Settings → Personalization.
-- Upload documents and images, and ask follow-up questions about them.
-- Search the web, edit messages, regenerate replies, and manage chat history.
-- Use light or dark mode on desktop and mobile.
+- **Multi-Model Orchestration**: Chat with models from Groq, Gemini, OpenAI, or a local Ollama server.
+- **Intelligent Routing & Reliability**: Auto mode evaluates task intent (reasoning, math, coding, documents, research) and picks the best model with exponential backoff cooldown management across HTTP 429/5xx errors.
+- **Hybrid RAG Engine**: Indexes uploaded PDFs, DOCXs, TXT, and code into SQLite FTS5 chunks and dense vector embeddings with Reciprocal Rank Fusion (RRF).
+- **Categorized Long-Term Memory**: Automatically captures and organizes profile, project, episodic, and semantic facts with JSON export/import and credential protection.
+- **Agent Mode & Safe Tool Suite**: Multi-step autonomous agent with AST-validated Python sandbox, GitHub repo inspector, structured CSV/JSON processor, and audit logging.
+- **Rich Interaction**: Real-time web search, document uploads, vision support, image generation, message editing, regeneration, and custom instructions.
+- **Privacy & Security**: Single-tenant architecture with visitor isolation, CSRF protection, and zero hardcoded secrets.
 
-Manual model selections stay selected. API keys are stored on the backend. Chats and preferences belong to the current browser session and do not sync across devices.
+Manual model selections stay selected. API keys are stored securely on the backend. Chats and preferences belong to the current browser session. Full workspace backups are exportable anytime.
 
 ## Run locally
 
@@ -64,7 +65,11 @@ npx playwright install chromium
 npm run test:ui
 ```
 
-Provider responses are mocked in the tests.
+Provider responses are mocked in the test suite (114+ backend unit/integration tests).
+
+## Architecture
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed architectural documentation, systems diagrams, and component breakdowns.
 
 ## Deployment
 
@@ -72,9 +77,8 @@ The Docker setup serves the frontend and backend together. Render and Railway co
 
 ## Current limitations
 
-- Replies depend on the available models and their API limits.
-- Document and memory retrieval uses keyword matching rather than embeddings.
-- Image generation needs an Ollama server that supports it.
+- Replies depend on configured API keys or local Ollama availability.
+- Image generation requires a local or remote model supporting image synthesis.
 
 ## License
 

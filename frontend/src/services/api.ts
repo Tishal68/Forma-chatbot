@@ -20,6 +20,15 @@ export type WebSearchResult = {
   snippet: string;
 };
 
+export type AgentStep = {
+  step: number;
+  action: string;
+  tool?: string;
+  thought?: string;
+  input?: Record<string, any>;
+  output?: string;
+};
+
 export type Message = {
   id: number;
   role: "user" | "assistant";
@@ -29,6 +38,8 @@ export type Message = {
   attachments?: Attachment[];
   sources?: WebSearchResult[];
   web_search?: boolean;
+  agent_mode?: boolean;
+  agent_steps?: AgentStep[];
   auto_reason?: string;
   output_mode?: "chat" | "image";
   created_at?: string;

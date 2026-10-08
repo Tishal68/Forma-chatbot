@@ -96,6 +96,9 @@ export function App() {
   const [webSearch, setWebSearch] = useState(() => {
     return safeStorage.getItem("forma-web-search") === "true";
   });
+  const [agentMode, setAgentMode] = useState(() => {
+    return safeStorage.getItem("forma-agent-mode") === "true";
+  });
   const [outputMode, setOutputMode] = useState<"chat" | "image">(() => safeStorage.getItem("forma-output-mode") === "image" ? "image" : "chat");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -142,6 +145,10 @@ export function App() {
   useEffect(() => {
     safeStorage.setItem("forma-web-search", String(webSearch));
   }, [webSearch]);
+
+  useEffect(() => {
+    safeStorage.setItem("forma-agent-mode", String(agentMode));
+  }, [agentMode]);
 
   const refresh = useCallback(async () => {
     const version = ++searchVersion.current;
@@ -522,9 +529,37 @@ export function App() {
           attachment_ids: currentAttachments.map((a) => a.id),
           web_search: currentWebSearch,
           output_mode: wantsImage ? "image" : "chat",
+          agent_mode: wantsImage ? false : agentMode,
         },
         abort.signal,
         (event) => {
+          if (event.type === "agent_step" || event.type === "agent_action") {
+            setMessages((old) =>
+              old.map((m) =>
+                m.id === assistantId
+                  ? {
+                      ...m,
+                      agent_steps: [
+                        ...(m.agent_steps || []),
+                        {
+                          step: event.step,
+                          action: event.action || "tool",
+                          tool: event.tool,
+                          thought: event.thought,
+                          input: event.input,
+                          output: event.output,
+                        },
+                      ],
+                    }
+                  : m,
+              ),
+            );
+            if (event.tool) {
+              setStatus(`Agent using tool: ${event.tool}…`);
+            } else if (event.thought) {
+              setStatus("Agent reasoning…");
+            }
+          }
           if (event.type === "start") {
             const oldId = assistantId;
             assistantId = event.message_id;
@@ -804,6 +839,8 @@ export function App() {
           onRemoveAttachment={handleRemoveAttachment}
           webSearch={webSearch}
           onToggleWebSearch={() => setWebSearch(!webSearch)}
+          agentMode={agentMode}
+          onToggleAgentMode={() => setAgentMode(!agentMode)}
           onOpenSettings={() => setSettings(true)}
         />
       </main>

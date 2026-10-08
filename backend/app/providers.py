@@ -280,9 +280,13 @@ def choose_auto_model(
                 score = 30 + (30 if coding else 0) + (15 if reasoning else 0)
             elif task == "complex reasoning":
                 score = 30 + (30 if reasoning else 0) + (10 if coding else 0)
+            elif task == "research":
+                score = 35 + min(context // 32768, 25) + (15 if reasoning else 0)
             else:
                 score = 30 + (5 if fast else 0) - (2 if reasoning else 0) - (1 if coding or model.get("supports_vision") else 0) + (5 if "general chat" in tags else 0)
             score += priority
+            if is_provider_cooling_down(provider)[0]:
+                score -= 1000
             if task in ('coding', 'complex reasoning') and not (reasoning or (task == 'coding' and coding)):
                 score -= 150  # A general chat fallback, not a verified specialist.
             # Stable ordering keeps choices predictable when scores tie.
@@ -422,6 +426,75 @@ def is_provider_configured(provider_name: str) -> bool:
     if env_var:
         return bool(os.getenv(env_var, "").strip())
     return False
+
+
+# ---------------------------------------------------------------------------
+# Provider Cooldown Management
+# Tracks temporary rate limits (429), server outages (5xx/timeout), and auth errors
+# ---------------------------------------------------------------------------
+_PROVIDER_COOLDOWNS: dict[str, dict[str, Any]] = {}
+
+COOLDOWN_RATE_LIMIT_SECONDS = float(os.getenv("COOLDOWN_RATE_LIMIT_SECONDS", "60.0"))
+COOLDOWN_SERVER_ERROR_SECONDS = float(os.getenv("COOLDOWN_SERVER_ERROR_SECONDS", "30.0"))
+COOLDOWN_QUOTA_SECONDS = float(os.getenv("COOLDOWN_QUOTA_SECONDS", "300.0"))
+COOLDOWN_AUTH_SECONDS = float(os.getenv("COOLDOWN_AUTH_SECONDS", "3600.0"))
+
+
+def record_provider_failure(provider: str, reason: str, detail: str = "", status_code: int | None = None) -> float:
+    """Record a failure for a provider and apply a backoff cooldown window."""
+    p_lower = (provider or "").lower().strip()
+    now_ts = time.time()
+    existing = _PROVIDER_COOLDOWNS.get(p_lower, {})
+    consecutive = existing.get("consecutive_failures", 0) + 1
+
+    if status_code == 429 or reason == "rate_limit":
+        duration = min(300.0, COOLDOWN_RATE_LIMIT_SECONDS * (1.5 ** (consecutive - 1)))
+        category = "rate_limit"
+    elif status_code in (401, 403) or reason in ("auth_failure", "invalid_key"):
+        duration = COOLDOWN_AUTH_SECONDS
+        category = "auth_failure"
+    elif reason == "quota_exceeded":
+        duration = COOLDOWN_QUOTA_SECONDS
+        category = "quota_exceeded"
+    else:
+        duration = min(120.0, COOLDOWN_SERVER_ERROR_SECONDS * (1.5 ** (consecutive - 1)))
+        category = "server_error"
+
+    until = now_ts + duration
+    _PROVIDER_COOLDOWNS[p_lower] = {
+        "category": category,
+        "detail": detail,
+        "status_code": status_code,
+        "until": until,
+        "duration": duration,
+        "consecutive_failures": consecutive,
+    }
+    return duration
+
+
+def record_provider_success(provider: str) -> None:
+    """Clear cooldowns on successful generation."""
+    p_lower = (provider or "").lower().strip()
+    _PROVIDER_COOLDOWNS.pop(p_lower, None)
+
+
+def is_provider_cooling_down(provider: str) -> tuple[bool, str | None, float]:
+    """Check if a provider is cooling down. Returns (is_cooling, reason, remaining_seconds)."""
+    p_lower = (provider or "").lower().strip()
+    entry = _PROVIDER_COOLDOWNS.get(p_lower)
+    if not entry:
+        return False, None, 0.0
+    now_ts = time.time()
+    remaining = entry["until"] - now_ts
+    if remaining <= 0:
+        _PROVIDER_COOLDOWNS.pop(p_lower, None)
+        return False, None, 0.0
+    return True, entry["category"], remaining
+
+
+def clear_cooldowns() -> None:
+    """Clear all active cooldowns."""
+    _PROVIDER_COOLDOWNS.clear()
 
 
 # In-memory health probe cache (TTL = 60s)

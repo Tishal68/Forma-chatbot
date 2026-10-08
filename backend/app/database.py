@@ -71,12 +71,57 @@ def initialize():
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           visitor_id TEXT NOT NULL,
           key TEXT NOT NULL, value TEXT NOT NULL,
+          category TEXT NOT NULL DEFAULT 'profile',
+          confidence REAL NOT NULL DEFAULT 1.0,
+          created_at TEXT NOT NULL DEFAULT '',
+          updated_at TEXT NOT NULL DEFAULT '',
           UNIQUE(visitor_id, key));
         CREATE INDEX IF NOT EXISTS memories_visitor ON memories(visitor_id);
+        CREATE INDEX IF NOT EXISTS memories_visitor_cat ON memories(visitor_id, category);
         CREATE TABLE IF NOT EXISTS message_attachments (
           message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
           attachment_id TEXT NOT NULL REFERENCES attachments(id) ON DELETE CASCADE,
           PRIMARY KEY(message_id, attachment_id));
+
+        CREATE TABLE IF NOT EXISTS document_chunks (
+          id TEXT PRIMARY KEY,
+          attachment_id TEXT NOT NULL REFERENCES attachments(id) ON DELETE CASCADE,
+          conversation_id TEXT NOT NULL,
+          visitor_id TEXT NOT NULL,
+          filename TEXT NOT NULL,
+          chunk_index INTEGER NOT NULL,
+          content TEXT NOT NULL,
+          page_number INTEGER DEFAULT NULL,
+          line_range TEXT DEFAULT NULL,
+          section_title TEXT DEFAULT '',
+          vector BLOB DEFAULT NULL,
+          created_at TEXT NOT NULL);
+
+        CREATE INDEX IF NOT EXISTS idx_chunks_att ON document_chunks(attachment_id);
+        CREATE INDEX IF NOT EXISTS idx_chunks_visitor ON document_chunks(visitor_id);
+        CREATE INDEX IF NOT EXISTS idx_chunks_conv ON document_chunks(conversation_id);
+
+        CREATE VIRTUAL TABLE IF NOT EXISTS document_chunks_fts USING fts5(
+          chunk_id UNINDEXED,
+          filename,
+          section_title,
+          content,
+          tokenize = 'unicode61');
+
+        CREATE TABLE IF NOT EXISTS tool_executions (
+          id TEXT PRIMARY KEY,
+          visitor_id TEXT NOT NULL,
+          conversation_id TEXT NOT NULL,
+          message_id INTEGER,
+          tool_name TEXT NOT NULL,
+          input_args TEXT NOT NULL,
+          output_summary TEXT NOT NULL,
+          duration_ms INTEGER NOT NULL,
+          status TEXT NOT NULL,
+          created_at TEXT NOT NULL);
+
+        CREATE INDEX IF NOT EXISTS idx_tool_exec_conv ON tool_executions(conversation_id);
+        CREATE INDEX IF NOT EXISTS idx_tool_exec_visitor ON tool_executions(visitor_id);
         ''')
 
         # Safely migrate existing tables if columns are missing
@@ -96,7 +141,8 @@ def initialize():
             db.execute('ALTER TABLE messages ADD COLUMN web_search INTEGER DEFAULT 0')
         if 'auto_reason' not in msg_columns:
             db.execute('ALTER TABLE messages ADD COLUMN auto_reason TEXT')
-
+        if 'agent_mode' not in msg_columns:
+            db.execute('ALTER TABLE messages ADD COLUMN agent_mode INTEGER DEFAULT 0')
 
         if 'output_mode' not in msg_columns:
             db.execute("ALTER TABLE messages ADD COLUMN output_mode TEXT NOT NULL DEFAULT 'chat'")
@@ -105,3 +151,14 @@ def initialize():
             db.execute('ALTER TABLE attachments ADD COLUMN generated INTEGER NOT NULL DEFAULT 0')
         db.execute('INSERT OR IGNORE INTO message_attachments(message_id, attachment_id) '
                    'SELECT message_id, id FROM attachments WHERE message_id IS NOT NULL AND generated = 0')
+
+        mem_columns = [r['name'] for r in db.execute('PRAGMA table_info(memories)').fetchall()]
+        if 'category' not in mem_columns:
+            db.execute("ALTER TABLE memories ADD COLUMN category TEXT NOT NULL DEFAULT 'profile'")
+        if 'confidence' not in mem_columns:
+            db.execute("ALTER TABLE memories ADD COLUMN confidence REAL NOT NULL DEFAULT 1.0")
+        if 'created_at' not in mem_columns:
+            db.execute("ALTER TABLE memories ADD COLUMN created_at TEXT NOT NULL DEFAULT ''")
+        if 'updated_at' not in mem_columns:
+            db.execute("ALTER TABLE memories ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''")
+        db.execute("CREATE INDEX IF NOT EXISTS memories_visitor_cat ON memories(visitor_id, category)")
