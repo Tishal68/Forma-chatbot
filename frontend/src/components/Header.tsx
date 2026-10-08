@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import {
   Check,
   ChevronDown,
@@ -59,6 +60,8 @@ export function Header({
   onExportChat,
 }: HeaderProps) {
   const [taskFilter, setTaskFilter] = useState("");
+  const [sidebarSlot, setSidebarSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => { setSidebarSlot(document.getElementById("sidebar-model-selector")); }, []);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | "vision" | "reasoning" | "fast" | "local">("all");
@@ -149,45 +152,8 @@ export function Header({
     return filteredProviders.reduce((acc, p) => acc + p.filteredModels.length, 0);
   }, [filteredProviders]);
 
-  return (
-    <header className="topbar">
-      <div className="header-left">
-        {!sidebar && (
-          <button
-            className="icon-button menu-toggle-btn"
-            aria-label="Open sidebar"
-            onClick={onOpenSidebar}
-            title="Open conversations sidebar (Ctrl + Shift + O)"
-          >
-            <Menu size={20} className="mobile-menu-icon" />
-            <PanelLeft size={18} className="desktop-menu-icon" />
-          </button>
-        )}
-        <div className="title-group desktop-title-group">
-          <span className="header-title" title={displayTitle}>
-            {displayTitle}
-          </span>
-          {messagesCount > 0 && onRename && (
-            <button
-              className="icon-button rename-title-btn"
-              onClick={onRename}
-              aria-label="Rename conversation"
-              title="Rename conversation"
-              disabled={busy}
-            >
-              <Pencil size={13} />
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="mobile-header-brand" aria-hidden="true">
-        forma<span className="brand-dot">.</span>
-      </div>
-
-      <div className="header-right">
-        {/* Unified Model & Provider Selector */}
-        <div className="unified-selector" ref={dropdownRef}>
+  const selector = (
+    <div className="unified-selector" ref={dropdownRef}>
           <button
             type="button"
             ref={triggerRef}
@@ -396,7 +362,51 @@ export function Header({
             </div>
           )}
         </div>
+  );
+
+  return (
+    <>
+    <header className="topbar">
+      <div className="header-left">
+        {!sidebar && (
+          <button
+            className="icon-button menu-toggle-btn"
+            aria-label="Open sidebar"
+            onClick={onOpenSidebar}
+            title="Open conversations sidebar (Ctrl + Shift + O)"
+          >
+            <Menu size={20} className="mobile-menu-icon" />
+            <PanelLeft size={18} className="desktop-menu-icon" />
+          </button>
+        )}
+        <div className="title-group desktop-title-group">
+          <span className="header-title" title={displayTitle}>
+            {displayTitle}
+          </span>
+          {messagesCount > 0 && onRename && (
+            <button
+              className="icon-button rename-title-btn"
+              onClick={onRename}
+              aria-label="Rename conversation"
+              title="Rename conversation"
+              disabled={busy}
+            >
+              <Pencil size={13} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="mobile-header-brand" aria-hidden="true">
+        forma<span className="brand-dot">.</span>
+      </div>
+
+      <div className="header-right">
+        {/* Unified Model & Provider Selector */}
+        {(!sidebar || !sidebarSlot) && selector}
       </div>
     </header>
+    {sidebar && sidebarSlot && createPortal(selector, sidebarSlot)}
+    </>
   );
 }

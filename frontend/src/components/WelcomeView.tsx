@@ -15,7 +15,8 @@ export function WelcomeView({
   return (
     <section className="welcome" aria-label="Welcome screen">
       <div className="welcome-inner">
-        <h1 className="welcome-heading">What can we work on?</h1>
+        <h1 className="welcome-heading">What can we <span className="welcome-gradient-text">work on?</span></h1>
+        <p className="welcome-subtitle">Ask, explore, build, and create with Forma.</p>
 
         <div className="welcome-suggestions-grid">
           <button
@@ -86,6 +87,7 @@ export function WelcomeView({
               }
             }}
             aria-label="Create image: Visualize your ideas"
+            disabled={!imageSupported}
             title={
               imageSupported
                 ? "Switch to text-to-image mode"

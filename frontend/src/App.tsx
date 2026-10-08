@@ -733,6 +733,13 @@ export function App() {
             <div className="loading">Loading conversation…</div>
           ) : messages.length === 0 ? (
             <WelcomeView
+              imageSupported={providers.some((p) => !!p.working && !!p.models?.some((m) => !!m.supports_image_generation))}
+              onTriggerImageMode={() => {
+                setOutputMode("image");
+                setWebSearch(false);
+                setInput("");
+                textarea.current?.focus();
+              }}
               onSelectPrompt={(prompt, autoWebSearch) => {
                 setInput(prompt);
                 if (autoWebSearch) setWebSearch(true);
@@ -815,6 +822,9 @@ export function App() {
         onClose={() => setSettings(false)}
         theme={theme}
         onThemeChange={setTheme}
+        webSearch={webSearch}
+        onWebSearchChange={setWebSearch}
+        imageMode={wantsImage}
         provider={provider}
         providers={providers}
         onProviderChange={handleProviderChange}
