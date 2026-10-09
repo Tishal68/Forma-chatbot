@@ -120,8 +120,9 @@ def test_ollama_metadata_probe_is_cached_and_does_not_guess(monkeypatch):
     assert requests.count('/api/tags') == 1
     assert requests.count('/api/show') == 2
 
+@pytest.mark.parametrize("agent_mode", [False, True])
 @pytest.mark.parametrize("failure_status", [401, 402, 403, 429, 500, 503])
-def test_auto_fails_over_before_output_and_records_actual_model(client, monkeypatch, failure_status):
+def test_auto_fails_over_before_output_and_records_actual_model(client, monkeypatch, failure_status, agent_mode):
     names = ['openai/gpt-oss-20b', 'openai/gpt-oss-120b']
     state = {'working': True, 'models': names}
     monkeypatch.setattr(providers, '_HEALTH_CACHE', {})
@@ -136,10 +137,12 @@ def test_auto_fails_over_before_output_and_records_actual_model(client, monkeypa
         calls.append(payload['model'])
         if len(calls) == 1:
             return httpx.Response(failure_status, json={'error': {'message': 'Provider unavailable'}})
+        if agent_mode:
+            return httpx.Response(200, json={'choices': [{'message': {'content': '{"action":"finish","answer":"success"}'}}]})
         return httpx.Response(200, text='data: {"choices":[{"delta":{"content":"success"}}]}\n\ndata: [DONE]\n\n')
     mock_transport(monkeypatch, handler)
     cid = client.post('/api/conversations').json()['id']
-    result = client.post('/api/chat', json={'conversation_id': cid, 'content': 'Hello', 'provider': 'auto', 'model': 'auto'})
+    result = client.post('/api/chat', json={'conversation_id': cid, 'content': 'Hello', 'provider': 'auto', 'model': 'auto', 'agent_mode': agent_mode})
     assert '"type": "shift"' in result.text
     assert '"status": "complete"' in result.text
     assert len(calls) == 2 and set(calls) == set(names)
@@ -205,3 +208,26 @@ def test_removed_provider_cannot_be_enabled_by_environment(monkeypatch):
     assert not providers.is_provider_configured("openrouter")
     state = asyncio.run(providers.probe_provider_health("openrouter", force=True))
     assert not state["working"] and state["models"] == []
+
+
+def test_agent_chat_endpoint_keeps_history_and_personalization(client, monkeypatch):
+    async def probe(provider):
+        return {'working': provider == 'groq', 'models': ['openai/gpt-oss-20b'] if provider == 'groq' else []}
+    monkeypatch.setattr(main, 'probe_provider_health', probe)
+    monkeypatch.setattr(main, 'profile_context', lambda *args: 'Saved preference: concise answers.')
+    payloads = []
+    def handler(request):
+        payloads.append(json.loads(request.content))
+        return httpx.Response(200, json={'choices': [{'message': {'content': '{"action":"finish","answer":"Cedar"}'}}]})
+    mock_transport(monkeypatch, handler)
+    cid = client.post('/api/conversations').json()['id']
+    for content in ['My project codename is Cedar.', 'Repeat my project codename.']:
+        response = client.post('/api/chat', json={
+            'conversation_id': cid, 'content': content, 'provider': 'groq',
+            'model': 'openai/gpt-oss-20b', 'agent_mode': True,
+        })
+        assert '"status": "complete"' in response.text
+    messages = payloads[-1]['messages']
+    assert any(m['role'] == 'user' and 'My project codename is Cedar.' in m['content'] for m in messages)
+    assert any(m['role'] == 'assistant' and 'Cedar' in m['content'] for m in messages)
+    assert any(m['role'] == 'system' and 'Saved preference: concise answers.' in m['content'] for m in messages)

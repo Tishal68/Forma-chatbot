@@ -1,6 +1,6 @@
 # Forma Architecture & Systems Design
 
-Forma is an intelligent, reliable, secure, RAG-powered personal AI assistant built for a single private user. It combines multi-model API orchestration with long-term memory, hybrid semantic document retrieval, safe personal tooling, and agentic workflows—all without expensive infrastructure or GPU requirements.
+Forma is a student-built AI chatbot with multi-provider routing, document retrieval, saved memory and optional Agent Mode. Cloud providers receive submitted prompts and context; local inference uses Ollama.
 
 ---
 
@@ -23,7 +23,7 @@ Forma is an intelligent, reliable, secure, RAG-powered personal AI assistant bui
 │  │   - Scoring & fallback    │  - Exponential backoff    │  │
 │  ├───────────────────────────┼───────────────────────────┤  │
 │  │   Long-Term Memory Engine │  Safe Personal Tools      │  │
-│  │   - Profile, Project,     │  - AST Python sandbox     │  │
+│  │   - Profile, Project,     │  - Python disabled        │  │
 │  │     Episodic, Semantic    │  - GitHub inspector       │  │
 │  │   - Credential filtering  │  - Structured CSV/JSON    │  │
 │  ├───────────────────────────┼───────────────────────────┤  │
@@ -57,15 +57,17 @@ Forma is an intelligent, reliable, secure, RAG-powered personal AI assistant bui
 - **Semantic Document Chunker**: Chunks uploaded documents (PDF, DOCX, TXT, CSV, Code) into 1,000-character windows with 150-character overlap while preserving line numbers and page markers.
 - **CPU-Friendly Dense Lexical Vectors**: Generates 128-dimensional dense lexical vectors using deterministic token and character n-gram hashing and term frequency pooling with zero GPU or heavy torch dependencies.
 - **Hybrid Search**: Combines SQLite FTS5 BM25 keyword search with dense cosine vector similarity using Reciprocal Rank Fusion (RRF; $k=60$).
-- **Strict Evidence Boundaries**: Injects context into prompts using `<retrieved_evidence>` boundary tags to prevent context bleeding and prompt injection.
+- **Strict Evidence Boundaries**: Injects context into prompts using `<retrieved_evidence>` boundary tags to identify retrieved evidence. These tags are not a security boundary and cannot guarantee protection against prompt injection.
 
 ### Personal AI Tools & Sandboxing
-- **In-Process AST-Restricted Python Sandbox**: Executes code in-process with strict AST syntax verification (blocking system-level imports and dangerous builtins), capturing standard output, and enforcing timeout bounds. Permits only safe mathematical and data utilities (`math`, `statistics`, `json`, `re`, `datetime`, `collections`, `itertools`).
+- **Python execution disabled**: The previous in-process runner has been removed. Code execution is unavailable through both direct calls and tool dispatch until an isolated service with enforceable resource limits is implemented.
 - **GitHub Repository Inspector**: Inspects public GitHub repositories (`/repos/{owner}/{repo}`) using unauthenticated or authenticated GitHub API requests, retrieving directory trees and README contents safely.
 - **Structured Data Processor**: Parses, cleans, and generates summary statistics for CSV and JSON datasets.
 - **Audit Logging**: Every tool execution is recorded in the `tool_executions` SQLite table with conversation ID, input parameters, execution time, and output summary.
 
 ### Agentic Multi-Step Workflow
 - When Agent Mode is active, Forma runs an autonomous multi-step reasoning loop (budgeted at a maximum of 6 steps).
-- The agent reasons about required actions, dispatches sandboxed tool calls, inspects intermediate outputs, and produces a final consolidated response.
+- The agent reasons about required actions, dispatches registered tool calls, inspects intermediate outputs, and produces a final consolidated response.
 - Steps and tool actions stream live to the client as `agent_step` and `agent_action` events, rendered in an expandable disclosure in the chat UI.
+
+Agent requests use the normal context builder for system instructions, history, personalization and evidence. Provider errors propagate to the common fallback handler; they are not recorded as successful answers.

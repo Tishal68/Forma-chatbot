@@ -4,12 +4,11 @@ Provides safe execution for:
 1. GitHub repository inspection (tree, readme, source files)
 2. Hybrid RAG document search
 3. Live Web search
-4. In-process AST-restricted Python execution (AST safety-checked, restricted builtins, and timeout)
+4. Python execution is disabled (no in-process code execution)
 5. Structured data processing (CSV/JSON statistics and filtering)
 
 Maintains an audit trail of all executions in the SQLite database.
 """
-import ast
 import asyncio
 import csv
 import io
@@ -75,108 +74,12 @@ def record_tool_execution(
 
 
 # ---------------------------------------------------------------------------
-# Safe Python Execution Sandbox
-# ---------------------------------------------------------------------------
-FORBIDDEN_AST_NODES = (
-    ast.Import, ast.ImportFrom,  # No raw imports inside sandbox
-)
-FORBIDDEN_NAMES = {
-    'eval', 'exec', 'compile', '__import__', 'open', 'input', 'breakpoint',
-    'globals', 'locals', 'vars', 'dir', 'delattr', 'getattr', 'setattr',
-    'hasattr', 'quit', 'exit', 'os', 'sys', 'subprocess', 'shutil', 'socket',
-}
-
-
-class ASTSafetyChecker(ast.NodeVisitor):
-    def __init__(self):
-        self.errors = []
-
-    def visit_Import(self, node):
-        for alias in node.names:
-            if alias.name not in ('math', 'statistics', 'json', 're', 'datetime', 'collections', 'itertools'):
-                self.errors.append(f"Importing '{alias.name}' is prohibited in safe sandbox.")
-
-    def visit_ImportFrom(self, node):
-        if node.module not in ('math', 'statistics', 'json', 're', 'datetime', 'collections', 'itertools'):
-            self.errors.append(f"Importing from '{node.module}' is prohibited in safe sandbox.")
-
-    def visit_Name(self, node):
-        if node.id in FORBIDDEN_NAMES:
-            self.errors.append(f"Use of restricted identifier '{node.id}' is blocked.")
-
-    def visit_Attribute(self, node):
-        if node.attr.startswith('__') and node.attr.endswith('__'):
-            self.errors.append(f"Access to special dunder attribute '{node.attr}' is prohibited.")
-
-
+# Python execution is disabled until an isolated execution service is available.
+# Keep the old entry point fail-closed for callers using older versions.
 def execute_safe_python(code: str, timeout: float = 4.0) -> dict[str, Any]:
-    """
-    Execute a block of Python code using in-process AST restricted execution.
-    Inspects syntax with AST visitor, permits only safe standard libraries (math, statistics, etc.),
-    blocks dangerous builtins, captures stdout, and enforces timeout protection.
-    Note: Operates via in-process language restrictions rather than OS-level process/container isolation.
-    """
-    try:
-        tree = ast.parse(code)
-    except SyntaxError as se:
-        return {'status': 'error', 'error': f"Syntax error: {se}"}
-
-    checker = ASTSafetyChecker()
-    checker.visit(tree)
-    if checker.errors:
-        return {'status': 'error', 'error': f"Security policy blocked execution: {'; '.join(checker.errors)}"}
-
-    safe_stdout = io.StringIO()
-
-    import collections, datetime as dt_mod, itertools, math as math_mod, re as re_mod, statistics as stats_mod
-
-    def safe_import(name, *args, **kwargs):
-        if name in ('math', 'statistics', 'json', 're', 'datetime', 'collections', 'itertools'):
-            return __import__(name, *args, **kwargs)
-        raise ImportError(f"Importing '{name}' is prohibited in safe sandbox.")
-
-    safe_builtins = {
-        '__import__': safe_import,
-        'print': lambda *args, **kwargs: print(*args, file=safe_stdout, **kwargs),
-        'range': range, 'len': len, 'int': int, 'float': float, 'str': str,
-        'bool': bool, 'list': list, 'dict': dict, 'set': set, 'tuple': tuple,
-        'min': min, 'max': max, 'sum': sum, 'abs': abs, 'round': round,
-        'sorted': sorted, 'enumerate': enumerate, 'zip': zip, 'map': map,
-        'filter': filter, 'all': all, 'any': any, 'reversed': reversed,
-        'math': math_mod, 'statistics': stats_mod, 'json': json, 're': re_mod,
-        'datetime': dt_mod, 'collections': collections, 'itertools': itertools,
-        'True': True, 'False': False, 'None': None,
-    }
-
-    local_namespace: dict[str, Any] = {}
-
-    def run_worker():
-        compiled = compile(tree, filename='<sandbox>', mode='exec')
-        exec(compiled, {'__builtins__': safe_builtins}, local_namespace)
-
-    start_time = time.time()
-    try:
-        # Run worker with thread / timeout
-        import concurrent.futures
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            future = pool.submit(run_worker)
-            future.result(timeout=timeout)
-    except concurrent.futures.TimeoutError:
-        return {'status': 'timeout', 'error': f'Execution timed out after {timeout} seconds.'}
-    except Exception as exc:
-        return {'status': 'error', 'error': f'Runtime error: {type(exc).__name__}: {exc}'}
-
-    elapsed_ms = int((time.time() - start_time) * 1000)
-    stdout_text = safe_stdout.getvalue()
-
-    # Extract final expression or return value if defined
-    result_val = local_namespace.get('result', None)
-
     return {
-        'status': 'success',
-        'stdout': stdout_text[:4000],
-        'result': str(result_val)[:1000] if result_val is not None else None,
-        'duration_ms': elapsed_ms,
+        'status': 'error',
+        'error': 'Python execution is disabled: arbitrary code requires an isolated execution service.',
     }
 
 
@@ -346,17 +249,6 @@ TOOLS_REGISTRY: dict[str, dict[str, Any]] = {
                 'branch': {'type': 'string', 'description': "Branch name (default 'main')."},
             },
             'required': ['repo'],
-        },
-    },
-    'python_sandbox': {
-        'name': 'python_sandbox',
-        'description': 'Execute safe Python code for calculations, math, data transformations, or logic testing.',
-        'parameters': {
-            'type': 'object',
-            'properties': {
-                'code': {'type': 'string', 'description': 'Python code to safely evaluate.'},
-            },
-            'required': ['code'],
         },
     },
     'data_processor': {

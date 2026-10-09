@@ -20,30 +20,19 @@ def setup_db(tmp_path, monkeypatch):
     initialize()
 
 
-def test_safe_python_execution_success_and_math():
-    code = (
-        "import math\n"
-        "radius = 5\n"
-        "area = math.pi * radius ** 2\n"
-        "print(f'Area: {round(area, 2)}')\n"
-        "result = round(area, 2)\n"
-    )
-    res = execute_safe_python(code)
-    assert res['status'] == 'success'
-    assert 'Area: 78.54' in res['stdout']
-    assert res['result'] == '78.54'
-
-
-def test_safe_python_blocks_malicious_imports_and_builtins():
-    # Attempting to import os
-    res_os = execute_safe_python("import os\nos.system('dir')")
-    assert res_os['status'] == 'error'
-    assert 'prohibited' in res_os['error'].lower()
-
-    # Attempting to use open()
-    res_open = execute_safe_python("f = open('secret.txt', 'w')")
-    assert res_open['status'] == 'error'
-    assert 'restricted' in res_open['error'].lower() or 'blocked' in res_open['error'].lower()
+@pytest.mark.parametrize('code', [
+    'result = 2 + 2',
+    "result = print.__globals__.get('__builtins__')['eval']('6 * 7')",
+    'while True: pass',
+])
+def test_python_execution_is_disabled(code):
+    from app.tools import TOOLS_REGISTRY
+    assert 'python_sandbox' not in TOOLS_REGISTRY
+    result = execute_safe_python(code)
+    assert result['status'] == 'error'
+    assert 'disabled' in result['error']
+    dispatched = asyncio.run(execute_tool('python_sandbox', {'code': code}, 'test', 'test'))
+    assert dispatched['status'] == 'error'
 
 
 def test_structured_data_processor():
@@ -105,3 +94,58 @@ def test_agent_action_parsing():
     parsed_plain = parse_agent_action(raw_text)
     assert parsed_plain['action'] == 'finish'
     assert 'plain text' in parsed_plain['answer']
+
+
+def test_agent_preserves_context_and_propagates_provider_errors():
+    import httpx
+    import json
+    context = [
+        {'role': 'system', 'content': 'Saved preference: use short answers.'},
+        {'role': 'user', 'content': 'My project is Cedar.'},
+        {'role': 'assistant', 'content': 'Understood.'},
+        {'role': 'user', 'content': 'What is its name? Evidence: Cedar.'},
+    ]
+    calls = []
+    def handler(request):
+        calls.append(json.loads(request.content))
+        return httpx.Response(200, json={'choices': [{'message': {'content': '{"action":"finish","answer":"Cedar"}'}}]})
+    async def emit(*args, **kwargs): pass
+    async def run():
+        async with httpx.AsyncClient(base_url='https://test.invalid', transport=httpx.MockTransport(handler)) as client:
+            answer = await run_agent_workflow(client, 'groq', 'test', 'What is its name?', 'test', 'test', 1, emit, context_messages=context)
+            assert answer == 'Cedar'
+        async with httpx.AsyncClient(base_url='https://test.invalid', transport=httpx.MockTransport(
+            lambda request: httpx.Response(429))) as client:
+            with pytest.raises(httpx.HTTPStatusError):
+                await run_agent_workflow(client, 'groq', 'test', 'Hello', 'test', 'test', 1, emit)
+    asyncio.run(run())
+    assert calls[0]['messages'][1:] == context[1:]
+    assert 'Saved preference: use short answers.' in calls[0]['messages'][0]['content']
+    assert 'python_sandbox' not in calls[0]['messages'][0]['content']
+    assert context[0]['content'] == 'Saved preference: use short answers.'
+
+
+def test_agent_step_limit_includes_last_observation_and_propagates_summary_failure(monkeypatch):
+    import httpx
+    import json
+    from app import agent
+    async def tool(**kwargs): return {'status': 'success', 'result': 'LAST_OBSERVATION'}
+    monkeypatch.setattr(agent, 'execute_tool', tool)
+    async def emit(*args, **kwargs): pass
+    async def run(fail_summary):
+        calls = []
+        def handler(request):
+            calls.append(json.loads(request.content))
+            if len(calls) == 1:
+                content = json.dumps({'action': 'tool', 'tool': 'data_processor', 'args': {'data': 'x'}})
+                return httpx.Response(200, json={'choices': [{'message': {'content': content}}]})
+            assert 'LAST_OBSERVATION' in calls[-1]['messages'][-1]['content']
+            return httpx.Response(503 if fail_summary else 200, json={'choices': [{'message': {'content': 'Done'}}]})
+        async with httpx.AsyncClient(base_url='https://test.invalid', transport=httpx.MockTransport(handler)) as client:
+            if fail_summary:
+                with pytest.raises(httpx.HTTPStatusError):
+                    await run_agent_workflow(client, 'groq', 'test', 'Summarize', 'test', 'test', 1, emit, max_steps=1)
+            else:
+                assert await run_agent_workflow(client, 'groq', 'test', 'Summarize', 'test', 'test', 1, emit, max_steps=1) == 'Done'
+    asyncio.run(run(False))
+    asyncio.run(run(True))

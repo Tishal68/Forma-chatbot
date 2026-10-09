@@ -1,8 +1,8 @@
-# Forma AI — Advanced Personal AI Assistant
+# Forma AI
 
 <p align="center">
   <strong>Think it. Shape it.</strong><br>
-  An intelligent, secure, RAG-powered personal AI assistant with long-term memory, multi-model auto routing, safe sandboxed tools, and agentic workflows.
+  A college project with multi-provider chat, document retrieval, saved preferences, and optional Agent Mode.
 </p>
 
 <p align="center">
@@ -18,9 +18,9 @@
 
 ## Overview
 
-**Forma** is an autonomous, private personal AI assistant engineered for deep problem solving, research, and daily workflow acceleration. Rather than locking you into a single AI provider or sending your personal data to proprietary third-party servers, Forma gives you full control over your models, memory, documents, and tools—with zero expensive infrastructure or GPU requirements.
+**Forma** is an AI chatbot built with React and FastAPI. It supports cloud providers such as Groq, Gemini and OpenAI, or local models through Ollama. It includes conversation history, document retrieval, saved memories and optional multi-step tools.
 
-Whether connected to ultra-fast cloud inference (**Groq**, **Google Gemini**, **OpenAI**) or running completely offline on your local machine (**Ollama**), Forma intelligently routes each question to the most capable model, retrieves context from your personal documents using hybrid RAG, remembers your projects across conversations, and executes safe sandboxed tasks autonomously.
+Cloud providers receive the prompts and context sent to them, which can include messages, relevant document extracts and saved preferences. Local Ollama can keep model inference on your own machine, but web search and GitHub tools still make external requests. Hosting and provider usage may have costs or limits.
 
 ---
 
@@ -34,19 +34,19 @@ Whether connected to ultra-fast cloud inference (**Groq**, **Google Gemini**, **
 ### 📚 CPU-Friendly Hybrid RAG Engine
 - **Semantic Document Chunking**: Ingests PDFs, DOCX files, codebases, CSVs, and plain text with 1,000-character semantic windows and 150-character overlaps, preserving line numbers and page markers.
 - **Lexical BM25 + Dense Lexical Vector Hybrid Search**: Combines SQLite FTS5 full-text search with 128-dimensional dense lexical vectors using token and character n-gram hashing and Reciprocal Rank Fusion (RRF; $k=60$)—delivering fast, high-precision retrieval with zero GPU or PyTorch overhead.
-- **Strict Evidence Boundaries**: Injects context into prompts using isolated `<retrieved_evidence>` boundaries to eliminate hallucinations and prompt injection vectors.
+- **Strict Evidence Boundaries**: Injects context into prompts using isolated `<retrieved_evidence>` boundaries to distinguish retrieved text from instructions. These delimiters do not guarantee protection against hallucinations or prompt injection.
 
 ### 💾 Categorized Long-Term Memory Engine
-- **Structured Knowledge Graph**: Organizes learned knowledge into distinct categories: `profile` (personal preferences), `project` (active repositories, stacks, goals), `episodic` (past decisions, milestones), and `semantic` (domain facts).
+- **Categorized memory records**: Organizes learned knowledge into distinct categories: `profile` (personal preferences), `project` (active repositories, stacks, goals), `episodic` (past decisions, milestones), and `semantic` (domain facts).
 - **Credential & Secret Protection**: Actively detects, redacts, and rejects API keys, passwords, and sensitive tokens from being committed into long-term memory.
 - **Full Portability**: Easily view, filter by category, edit, export, or import memories as standard JSON.
 
-### 🤖 Autonomous Agent Mode & Safe Tool Suite
+### 🤖 Agent Mode & Tools
 - **Multi-Step ReAct Agent**: Solves complex questions using an iterative ReAct reasoning loop (budgeted up to 6 steps) with real-time thought and action streaming.
-- **AST-Validated Safe Python Sandbox**: Executes mathematical analysis, calculations, and data scripts in-process with strict AST syntax verification, restricted builtins, and execution timeouts.
+- **Python execution disabled**: Arbitrary Python code is not executed. The previous in-process runner was removed because it did not provide a secure boundary or enforceable timeout. Re-enabling code execution requires a separate isolated service with resource limits.
 - **GitHub Repository Inspector**: Safely inspects public repositories, directory trees, commit structures, and README files.
 - **Structured Data Processor**: Parses, cleans, and computes summary statistics for CSV and JSON datasets.
-- **Immutable Tool Audit Logging**: Every tool execution is captured in SQLite with execution duration, arguments, and outputs.
+- **Tool Audit Logging**: Every tool execution is captured in SQLite with execution duration, arguments, and outputs.
 
 ### 🌐 Real-Time Web Search & Fact Verification
 - **Multi-Tier Search Fallback**: Seamlessly queries configured API providers (**Tavily**, **Brave**) with graceful fallback to **DuckDuckGo**.
@@ -82,7 +82,7 @@ Forma is built with a lightweight, high-performance architecture:
 │  │   - Capability matching   │  - Transparent failover   │  │
 │  ├───────────────────────────┼───────────────────────────┤  │
 │  │   Long-Term Memory Engine │  Safe Personal Tools      │  │
-│  │   - Profile, Project,     │  - AST Python sandbox     │  │
+│  │   - Profile, Project,     │  - Python disabled        │  │
 │  │     Episodic, Semantic    │  - GitHub repo inspector  │  │
 │  │   - Credential filtering  │  - CSV / JSON processor   │  │
 │  ├───────────────────────────┼───────────────────────────┤  │
@@ -171,7 +171,7 @@ Open **http://127.0.0.1:5173** in your browser.
 
 ## Verification & Testing
 
-Forma maintains an extensive automated test suite covering routing, memory, RAG, sandboxing, and UI responsiveness:
+Forma maintains an extensive automated test suite covering routing, memory, RAG, disabled code execution, and UI responsiveness:
 
 ```bash
 # Run all backend unit & integration tests (154+ tests)
@@ -202,11 +202,11 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for full deployment guides, volume persistenc
 
 ## Privacy & Security
 
-- **Single-Tenant Privacy**: Data belongs exclusively to your browser session and backend database.
+- **Session separation**: Conversations and preferences are associated with a visitor session. The server operator controls the database; this is not end-to-end encryption.
 - **No Telemetry**: Zero analytics, external trackers, or third-party tracking cookies.
-- **Sandboxed Execution**: Python code runs in an AST-restricted environment with strict import allowlists.
+- **Code execution**: Disabled server-side and unavailable to Agent Mode.
 - **Credential Protection**: Automatic credential scanning prevents sensitive keys or tokens from being saved in memory.
-- **One-Click Backup**: Export your full workspace anytime via `Settings → Personalization → Full Backup` or `GET /api/backup`.
+- **JSON export**: `GET /api/backup` exports conversations, messages, personalization and attachment metadata. It does not include attachment file contents.
 
 ---
 

@@ -1258,24 +1258,6 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
 
                 try:
                     async with client_instance as c:
-                        if body.agent_mode:
-                            text = await run_agent_workflow(
-                                client=c,
-                                provider=curr_provider,
-                                model=curr_model,
-                                user_prompt=user_text or body.content,
-                                visitor_id=visitor_id,
-                                conversation_id=cid,
-                                message_id=mid,
-                                emit_fn=emit,
-                                is_openai_format=curr_is_cloud,
-                            )
-                            for chunk in [text[i:i+50] for i in range(0, len(text), 50)]:
-                                await emit('token', content=chunk)
-                                await asyncio.sleep(0.01)
-                            status = 'complete'
-                            record_provider_success(curr_provider)
-                            break
                         if output_image:
                             await emit('status', message='Creating your image…')
                             async def image_progress(message):
@@ -1309,6 +1291,35 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
                             image_count=len(image_b64s),
                         )
                         context_window, output_tokens = generation_limits(curr_provider, curr_model)
+                        if body.agent_mode:
+                            agent_context = [dict(message) for message in context]
+                            if image_b64s and agent_context:
+                                if curr_is_cloud:
+                                    agent_context[-1]['content'] = [
+                                        {'type': 'text', 'text': agent_context[-1]['content']},
+                                        *[{'type': 'image_url', 'image_url': {'url': f"data:{img['content_type']};base64,{b64}"}}
+                                          for img, b64 in zip(valid_image_attachments, image_b64s)],
+                                    ]
+                                else:
+                                    agent_context[-1]['images'] = image_b64s
+                            text = await run_agent_workflow(
+                                client=c,
+                                provider=curr_provider,
+                                model=curr_model,
+                                user_prompt=user_text or body.content,
+                                visitor_id=visitor_id,
+                                conversation_id=cid,
+                                message_id=mid,
+                                emit_fn=emit,
+                                is_openai_format=curr_is_cloud,
+                                context_messages=agent_context,
+                            )
+                            for chunk in [text[i:i+50] for i in range(0, len(text), 50)]:
+                                await emit('token', content=chunk)
+                                await asyncio.sleep(0.01)
+                            status = 'complete'
+                            record_provider_success(curr_provider)
+                            break
 
                         if curr_is_cloud:
                             cloud_messages = [dict(m) for m in context]

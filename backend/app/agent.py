@@ -78,6 +78,7 @@ async def run_agent_workflow(
     emit_fn: Callable[[str, Any], Any],
     is_openai_format: bool = True,
     max_steps: int = MAX_AGENT_STEPS,
+    context_messages: list[dict[str, Any]] | None = None,
 ) -> str:
     """Execute multi-step agent workflow with tool dispatch and progress emission."""
     tools_desc = format_tools_description()
@@ -98,10 +99,16 @@ async def run_agent_workflow(
                 prompt_content += f"  Observation: {s['observation'][:1200]}\n"
             prompt_content += "\nBased on the above observations, decide the next action or finish."
 
-        messages = [
-            {'role': 'system', 'content': system_msg},
-            {'role': 'user', 'content': prompt_content},
+        messages = [dict(message) for message in context_messages] if context_messages else [
+            {'role': 'user', 'content': f'User Request: {user_prompt}'},
         ]
+        # Keep the normal chat system instructions, history, memory and evidence.
+        if messages and messages[0].get('role') == 'system':
+            messages[0]['content'] = str(messages[0]['content']) + '\n\n' + system_msg
+        else:
+            messages.insert(0, {'role': 'system', 'content': system_msg})
+        if scratchpad:
+            messages.append({'role': 'user', 'content': prompt_content})
 
         # Call model for next decision
         payload = {'model': model, 'stream': False, 'temperature': 0.2}
@@ -124,7 +131,7 @@ async def run_agent_workflow(
             )
         except Exception as exc:
             log.warning('Agent model inference error: %s', exc)
-            return f"Agent workflow could not complete due to provider error: {exc}"
+            raise
 
         decision = parse_agent_action(raw_text)
         action_type = decision.get('action')
@@ -167,19 +174,21 @@ async def run_agent_workflow(
 
     # If loop exhausted max_steps, synthesize final answer with current observations
     await emit_fn('status', message='Reached step limit. Synthesizing available findings…')
-    summary_messages = [
-        {'role': 'system', 'content': 'Synthesize a helpful final answer based on the completed steps and observations.'},
-        {'role': 'user', 'content': prompt_content + '\nPlease provide your final answer now.'},
-    ]
-    try:
-        resp = await client.post(endpoint, json={'model': model, 'messages': summary_messages, 'stream': False})
-        resp.raise_for_status()
-        data = resp.json()
-        return (
-            data.get('choices', [{}])[0].get('message', {}).get('content', '')
-            if is_openai_format else data.get('message', {}).get('content', '')
-        )
-    except Exception:
-        return "Completed maximum allowed steps. Here is a summary of the observations gathered:\n" + "\n".join(
-            f"Step {s['step']}: {s['observation'][:300]}" for s in scratchpad
-        )
+    observations = '\n'.join(
+        f"Step {step['step']}: {step['tool']} returned {step['observation'][:1200]}"
+        for step in scratchpad
+    )
+    summary_messages = [dict(message) for message in messages]
+    summary_messages.append({
+        'role': 'user',
+        'content': 'The tool budget is exhausted. Provide a final answer from these observations, '
+                   'including any limitations. Do not call another tool.\n' + observations,
+    })
+    # Propagate provider failures so the caller can apply its normal failover policy.
+    resp = await client.post(endpoint, json={'model': model, 'messages': summary_messages, 'stream': False})
+    resp.raise_for_status()
+    data = resp.json()
+    return (
+        data.get('choices', [{}])[0].get('message', {}).get('content', '')
+        if is_openai_format else data.get('message', {}).get('content', '')
+    )
