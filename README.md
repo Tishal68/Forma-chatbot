@@ -147,8 +147,7 @@ OLLAMA_BASE_URL=http://127.0.0.1:11434
 TAVILY_API_KEY=tvly_your_tavily_key
 BRAVE_API_KEY=BSAx_your_brave_key
 
-# Optional: GitHub Tool Access
-GITHUB_TOKEN=ghp_your_github_token
+# GitHub inspection supports public repositories only and never uses server tokens.
 ```
 
 ### 3. Launch Backend & Frontend

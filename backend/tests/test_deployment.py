@@ -30,12 +30,14 @@ def test_production_access_and_health(production):
 
 def test_hosted_origin(production, monkeypatch):
     auth = ('test-owner', 'test-only-long-password')
-    assert production.post('/api/conversations', auth=auth, headers={'origin': 'https://chat.example.com'}).status_code == 201
-    assert production.post('/api/conversations', auth=auth, headers={'origin': 'https://evil.example'}).status_code == 403
+    production.get('/api/conversations', auth=auth)
+    token = production.cookies.get('forma_csrf')
+    assert production.post('/api/conversations', auth=auth, headers={'x-csrf-token': token, 'origin': 'https://chat.example.com'}).status_code == 201
+    assert production.post('/api/conversations', auth=auth, headers={'x-csrf-token': token, 'origin': 'https://evil.example'}).status_code == 403
     monkeypatch.setenv('RENDER_EXTERNAL_URL', 'https://forma.onrender.com')
-    assert production.post('/api/conversations', auth=auth, headers={'origin': 'https://forma.onrender.com'}).status_code == 201
+    assert production.post('/api/conversations', auth=auth, headers={'x-csrf-token': token, 'origin': 'https://forma.onrender.com'}).status_code == 201
     monkeypatch.setenv('RAILWAY_PUBLIC_DOMAIN', 'forma.up.railway.app')
-    assert production.post('/api/conversations', auth=auth, headers={'origin': 'https://forma.up.railway.app'}).status_code == 201
+    assert production.post('/api/conversations', auth=auth, headers={'x-csrf-token': token, 'origin': 'https://forma.up.railway.app'}).status_code == 201
 
 def test_production_refuses_missing_password(tmp_path, monkeypatch):
     monkeypatch.setenv('APP_ENV', 'production')

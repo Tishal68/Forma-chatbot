@@ -15,13 +15,13 @@ import io
 import json
 import logging
 import math
-import os
 import re
 import statistics
 import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -92,25 +92,25 @@ async def inspect_github_repo(repo: str, path: str = '', branch: str = 'main') -
     Safe read-only operation; never modifies repos.
     """
     clean_repo = repo.strip().strip('/')
-    if not re.fullmatch(r'[\w.-]+/[\w.-]+', clean_repo):
+    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*', clean_repo):
         return {'status': 'error', 'error': "Invalid repository format. Use 'owner/repo' (e.g. 'octocat/Hello-World')."}
 
     clean_path = path.strip().lstrip('/')
-    api_url = f'https://api.github.com/repos/{clean_repo}/contents/{clean_path}'
+    if any(part in ('.', '..') for part in clean_path.split('/')) or '\\' in clean_path:
+        return {'status': 'error', 'error': 'Invalid repository path.'}
+    api_url = f'https://api.github.com/repos/{clean_repo}/contents/{quote(clean_path, safe="/")}'
     params = {'ref': branch} if branch else {}
     headers = {'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'Forma-AI-Assistant'}
 
-    token = os.getenv('GITHUB_TOKEN') or os.getenv('GH_TOKEN')
-    if token:
-        headers['Authorization'] = f'Bearer {token}'
-
+    # Visitor-controlled tool calls must never inherit the operator's credentials.
+    # Public repositories only; do not follow redirects to another destination.
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=False) as client:
             resp = await client.get(api_url, params=params, headers=headers)
             if resp.status_code == 404:
                 return {'status': 'error', 'error': f"Repository '{clean_repo}' or path '{clean_path}' not found."}
             if resp.status_code == 403:
-                return {'status': 'error', 'error': 'GitHub API rate limit exceeded. Please wait or set GITHUB_TOKEN.'}
+                return {'status': 'error', 'error': 'GitHub API rate limit exceeded. Please try again later.'}
             resp.raise_for_status()
             data = resp.json()
 

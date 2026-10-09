@@ -73,8 +73,20 @@ def extract_docx_text(file_path: Path) -> str:
     """Extract formatted text from docx via document.xml without requiring python-docx."""
     try:
         with zipfile.ZipFile(file_path) as z:
-            xml_content = z.read('word/document.xml')
-        tree = ET.fromstring(xml_content)
+            limit = 8 * 1024 * 1024
+            entry = z.getinfo('word/document.xml')
+            if entry.file_size > limit:
+                raise ValueError('DOCX document XML exceeds the 8MB expanded limit.')
+            with z.open(entry) as document:
+                xml_content = document.read(limit + 1)
+            if len(xml_content) > limit:
+                raise ValueError('DOCX document XML exceeds the 8MB expanded limit.')
+        class NoDoctypeTreeBuilder(ET.TreeBuilder):
+            def doctype(self, name, pubid, system):
+                raise ValueError('DOCX XML document types and entities are not supported.')
+
+        # Reject DTDs at the parser level, including UTF-16 encoded XML.
+        tree = ET.fromstring(xml_content, parser=ET.XMLParser(target=NoDoctypeTreeBuilder()))
         # XML namespace for wordprocessingML
         namespaces = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
         paragraphs = []

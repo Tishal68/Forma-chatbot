@@ -61,7 +61,7 @@ Forma is a student-built AI chatbot with multi-provider routing, document retrie
 
 ### Personal AI Tools & Sandboxing
 - **Python execution disabled**: The previous in-process runner has been removed. Code execution is unavailable through both direct calls and tool dispatch until an isolated service with enforceable resource limits is implemented.
-- **GitHub Repository Inspector**: Inspects public GitHub repositories (`/repos/{owner}/{repo}`) using unauthenticated or authenticated GitHub API requests, retrieving directory trees and README contents safely.
+- **GitHub Repository Inspector**: Inspects public GitHub repositories (`/repos/{owner}/{repo}`) using unauthenticated GitHub API requests (server tokens are never used for visitor tool calls), retrieving directory trees and README contents safely.
 - **Structured Data Processor**: Parses, cleans, and generates summary statistics for CSV and JSON datasets.
 - **Audit Logging**: Every tool execution is recorded in the `tool_executions` SQLite table with conversation ID, input parameters, execution time, and output summary.
 

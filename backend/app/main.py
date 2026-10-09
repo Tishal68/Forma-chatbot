@@ -195,8 +195,12 @@ async def security_middleware(request: Request, call_next):
                 except Exception:
                     pass
 
-        # Validate CSRF token if header provided
+        # Browser mutations must present the double-submit token. CLI clients
+        # without browser metadata still undergo any supplied token validation.
         header_csrf = request.headers.get('x-csrf-token')
+        browser_request = origin or request.headers.get('referer') or request.headers.get('sec-fetch-site')
+        if browser_request and (not header_csrf or new_csrf):
+            return JSONResponse({'detail': 'Missing CSRF token. Reload the page and try again.'}, status_code=403)
         if header_csrf and csrf_cookie:
             import secrets
             if not secrets.compare_digest(header_csrf, csrf_cookie):
@@ -578,6 +582,7 @@ async def delete_conversation(cid: str, request: Request):
     assert_conversation_idle(cid)
     get_conversation_or_404(cid, visitor_id)
     with connect() as db:
+        db.execute('DELETE FROM tool_executions WHERE conversation_id = ? AND visitor_id = ?', (cid, visitor_id))
         db.execute('DELETE FROM conversations WHERE id = ? AND visitor_id = ?', (cid, visitor_id))
 
     # Clean up associated files on disk
@@ -606,6 +611,7 @@ async def clear_all_conversations(request: Request):
                     detail='Stop active generation before clearing chats.',
                 )
 
+        db.execute('DELETE FROM tool_executions WHERE visitor_id = ?', (visitor_id,))
         db.execute('DELETE FROM conversations WHERE visitor_id = ?', (visitor_id,))
         db.execute('DELETE FROM memories WHERE visitor_id = ?', (visitor_id,))
         db.execute('DELETE FROM visitor_profiles WHERE visitor_id = ?', (visitor_id,))
@@ -656,7 +662,7 @@ async def upload_attachment(cid: str, request: Request, file: UploadFile = File(
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
 
-    content = await file.read()
+    content = await file.read(settings.MAX_ATTACHMENT_SIZE_BYTES + 1)
     if len(content) > settings.MAX_ATTACHMENT_SIZE_BYTES:
         mb = settings.MAX_ATTACHMENT_SIZE_BYTES // (1024 * 1024)
         raise HTTPException(
