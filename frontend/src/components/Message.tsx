@@ -272,6 +272,7 @@ export const Message = memo(function Message({
               <div key={i} className="agent-step-item">
                 <div className="agent-step-header">
                   <span className="agent-step-badge">Step {st.step}</span>
+                  {st.status && <span className="agent-step-status">{st.status}</span>}
                   {st.tool && (
                     <span className="agent-step-tool">
                       <Terminal size={11} />

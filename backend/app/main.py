@@ -534,6 +534,16 @@ async def get_conversation(cid: str, request: Request):
             if attachment and not any(a['id'] == attachment['id'] for a in group):
                 group.append(attachment)
 
+        # Return only safe tool status metadata; keep arguments/results out of the chat payload.
+        agent_steps = {}
+        for execution in db.execute(
+            'SELECT message_id, tool_name, status FROM tool_executions '
+            'WHERE conversation_id = ? AND visitor_id = ? ORDER BY created_at, rowid',
+            (cid, visitor_id),
+        ):
+            steps = agent_steps.setdefault(execution['message_id'], [])
+            steps.append({'step': len(steps) + 1, 'action': 'tool',
+                          'tool': execution['tool_name'], 'status': execution['status']})
         parsed_messages = []
         for m in messages:
             md = dict(m)
@@ -546,6 +556,7 @@ async def get_conversation(cid: str, request: Request):
             else:
                 md['sources'] = []
             md['attachments'] = attachments_by_msg.get(md['id'], [])
+            md['agent_steps'] = agent_steps.get(md['id'], [])
             parsed_messages.append(md)
 
         result['messages'] = parsed_messages
@@ -1376,7 +1387,7 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
                                                     await emit('token', content=delta)
                                         except json.JSONDecodeError as exc:
                                             raise ValueError('The provider sent an invalid streaming response.') from exc
-                                if not terminal or not text:
+                                if not terminal or not text.strip():
                                     raise ValueError('The model connection closed without a complete answer. Please retry.')
                                 status = 'complete'
                         else:
@@ -1424,8 +1435,8 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
                                         status = 'complete'
                                         break
 
-                            if status != 'complete':
-                                raise ValueError('The model connection closed early. You can retry this response.')
+                            if status != 'complete' or not text.strip():
+                                raise ValueError('The model connection closed without a complete answer. You can retry this response.')
 
                         # Generation completed successfully
                         record_provider_success(curr_provider)
@@ -1445,6 +1456,10 @@ async def prepare_chat_response(body: ChatPayload, request: Request):
                         await emit('error', message=format_error_message(exc, curr_provider))
                         break
 
+                    if status_code in (401, 402, 403, 429):
+                        # Sibling models share this credential/quota; try another provider.
+                        candidates[cand_idx + 1:] = [candidate for candidate in candidates[cand_idx + 1:]
+                                                      if candidate[0] != curr_provider]
                     if cand_idx < len(candidates) - 1:
                         next_p, next_m, _ = candidates[cand_idx + 1]
                         next_pcfg = get_provider_config(next_p)

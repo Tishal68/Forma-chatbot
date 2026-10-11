@@ -26,6 +26,11 @@ for (const width of [360, 390, 768, 1024, 1366, 1920]) {
     await page.screenshot({path: `test-results/welcome-${width}.png`});
     const selector = page.getByRole('button', {name: /Select model: currently/});
     await expect(selector).toHaveCount(1);
+    if (width <= 600) {
+      const brand = await page.locator('.mobile-header-brand').boundingBox();
+      const picker = await selector.boundingBox();
+      expect(brand!.x + brand!.width).toBeLessThanOrEqual(picker!.x);
+    }
     await selector.click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();

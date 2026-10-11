@@ -56,6 +56,11 @@ export function SettingsModal({
 }: SettingsModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [activeTab, setActiveTab] = useState<Tab>(initialTab || "general");
+  const [memoryVisited, setMemoryVisited] = useState(false);
+  useEffect(() => {
+    if (!open) setMemoryVisited(false);
+    else if (activeTab === "memory") setMemoryVisited(true);
+  }, [open, activeTab]);
 
   useEffect(() => {
     if (open && initialTab) {
@@ -205,7 +210,7 @@ export function SettingsModal({
 
               <div className="settings-panel-card">
                 <h4>About Forma</h4>
-                <p>A personal AI assistant built with React, TypeScript, FastAPI, and SQLite. Designed for privacy, speed, and seamless multi-provider orchestration.</p>
+                <p>A student-built AI assistant made with React, TypeScript, FastAPI, and SQLite.</p>
                 <a className="settings-about-link" href="https://github.com/Tishal68/Forma-chatbot" target="_blank" rel="noopener noreferrer">
                   View project on GitHub
                 </a>
@@ -213,8 +218,8 @@ export function SettingsModal({
             </div>
           )}
 
-          {activeTab === "memory" && (
-            <div className="tab-pane">
+          {open && (activeTab === "memory" || memoryVisited) && (
+            <div className="tab-pane" hidden={activeTab !== "memory"}>
               {open && <PersonalizationSettings />}
             </div>
           )}

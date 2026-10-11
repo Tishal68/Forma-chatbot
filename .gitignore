@@ -13,3 +13,4 @@ data/
 test-results/
 playwright-report/
 *.tsbuildinfo
+qa-results/

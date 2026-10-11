@@ -54,7 +54,7 @@ export function Header({
     model === "auto" ||
     (!provider && !model) ||
     model === "";
-  const currentDetail = modelDetails.find((m) => m.id === model);
+  const currentDetail = modelDetails.find((m) => m.id === model && m.provider === provider);
 
   // Accessible label for screen readers and regression tests
   const activeLabel = isAuto
@@ -71,7 +71,7 @@ export function Header({
             className="icon-button menu-toggle-btn"
             aria-label="Open sidebar"
             onClick={onOpenSidebar}
-            title="Open conversations sidebar (Ctrl + Shift + O)"
+            title="Open conversations sidebar"
           >
             <Menu size={20} className="mobile-menu-icon" />
             <PanelLeft size={18} className="desktop-menu-icon" />
@@ -121,7 +121,7 @@ export function Header({
           {isAuto ? (
             <>
               <Sparkles size={13} className="sparkle-icon" />
-              <span className="forma-auto-pill-text">Forma Auto</span>
+              <span className="forma-auto-pill-text"><span className="forma-auto-prefix">Forma </span>Auto</span>
             </>
           ) : (
             <>

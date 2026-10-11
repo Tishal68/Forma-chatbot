@@ -244,7 +244,7 @@ def choose_auto_model(
 
     ranked: list[tuple[int, str, str, str]] = []
     for provider, state in health.items():
-        if not state.get("working"):
+        if not state.get("working") or is_provider_cooling_down(provider)[0]:
             continue
         reported = set(state.get("models") or [])
         if provider == "ollama":
@@ -285,8 +285,6 @@ def choose_auto_model(
             else:
                 score = 30 + (5 if fast else 0) - (2 if reasoning else 0) - (1 if coding or model.get("supports_vision") else 0) + (5 if "general chat" in tags else 0)
             score += priority
-            if is_provider_cooling_down(provider)[0]:
-                score -= 1000
             if task in ('coding', 'complex reasoning') and not (reasoning or (task == 'coding' and coding)):
                 score -= 150  # A general chat fallback, not a verified specialist.
             # Stable ordering keeps choices predictable when scores tie.
