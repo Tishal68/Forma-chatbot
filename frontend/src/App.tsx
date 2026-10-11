@@ -133,9 +133,16 @@ export function App() {
   const textarea = useRef<HTMLTextAreaElement>(null);
   const loadVersion = useRef(0);
   const searchVersion = useRef(0);
+  const uploadConversation = useRef<{ version: number; promise: Promise<Conversation> } | null>(null);
+  const uploadControllers = useRef(new Map<string, AbortController>());
+  const cancelUploads = useCallback(() => {
+    for (const upload of uploadControllers.current.values()) upload.abort();
+    uploadControllers.current.clear();
+  }, []);
+  useEffect(() => cancelUploads, [cancelUploads]);
 
   const isAuto = provider === "auto" || model === "auto" || !model || model === "";
-  const currentDetail = modelDetails.find((d) => d.id === model);
+  const currentDetail = modelDetails.find((d) => d.id === model && d.provider === provider);
   const currentProviderInfo = providers.find((p) => p.id === provider);
   const wantsImage = outputMode === "image" || !!currentDetail?.supports_image_generation;
   const usable = (detail: import("./types").ModelDetail) => wantsImage
@@ -183,9 +190,7 @@ export function App() {
 
         const data = await api<ModelsResponse>("/models?" + query.toString());
         if (version !== modelRequestVersion.current) return;
-        if (data.providers && data.providers.length > 0) {
-          setProviders(data.providers);
-        }
+        setProviders(data.providers || []);
         const activeProvider = targetProvider || data.provider || "groq";
         if (targetProvider !== "auto") {
           setProvider(activeProvider);
@@ -238,15 +243,23 @@ export function App() {
     const fileArray = Array.from(files);
     if (fileArray.length === 0) return;
 
+    const version = loadVersion.current;
     let cid = id;
     if (!cid) {
       try {
-        const chat = await api<Conversation>("/conversations", { method: "POST" });
+        if (uploadConversation.current?.version !== version) {
+          uploadConversation.current = { version, promise: api<Conversation>("/conversations", { method: "POST" }) };
+        }
+        const chat = await uploadConversation.current.promise;
+        if (version !== loadVersion.current) return;
         cid = chat.id;
         setId(cid);
         refresh();
       } catch (e) {
-        setError((e as Error).message || "Failed to initialize conversation for upload.");
+        if (version === loadVersion.current) {
+          uploadConversation.current = null;
+          setError((e as Error).message || "Failed to initialize conversation for upload.");
+        }
         return;
       }
     }
@@ -260,6 +273,7 @@ export function App() {
     }
 
     for (const file of fileArray) {
+      if (version !== loadVersion.current) return;
       const tempId = "temp-" + Math.random().toString(36).slice(2);
       const pending: import("./types").Attachment = {
         id: tempId,
@@ -273,26 +287,34 @@ export function App() {
         is_image: file.type.startsWith("image/"),
       };
 
+      const upload = new AbortController();
+      uploadControllers.current.set(tempId, upload);
       setAttachments((prev) => [...prev, pending]);
 
       try {
         const uploaded = await uploadAttachment(cid, file, (percent: number) => {
+          if (version !== loadVersion.current) return;
           setAttachments((prev) =>
             prev.map((a) => (a.id === tempId ? { ...a, progress: percent } : a)),
           );
-        });
+        }, upload.signal);
+        if (version !== loadVersion.current) return;
         setAttachments((prev) =>
           prev.map((a) => (a.id === tempId ? { ...uploaded, uploading: false } : a)),
         );
       } catch (e) {
+        if (version !== loadVersion.current || upload.signal.aborted) continue;
         const errDetail = (e as Error).message || "Upload failed";
         setError(errDetail);
         setAttachments((prev) => prev.filter((a) => a.id !== tempId));
+      } finally {
+        uploadControllers.current.delete(tempId);
       }
     }
   };
 
   const handleRemoveAttachment = async (attachmentId: string) => {
+    uploadControllers.current.get(attachmentId)?.abort();
     setAttachments((prev) => prev.filter((a) => a.id !== attachmentId));
     if (id && !attachmentId.startsWith("temp-")) {
       try {
@@ -306,6 +328,7 @@ export function App() {
   const open = useCallback(async (chat: Conversation) => {
     if (locked.current) return;
     const version = ++loadVersion.current;
+    cancelUploads();
     setLoading(true);
     setId(chat.id);
     setInput("");
@@ -337,6 +360,7 @@ export function App() {
   const newChat = useCallback(() => {
     if (locked.current) return;
     ++loadVersion.current;
+    cancelUploads();
     setLoading(false);
     setId(null);
     setMessages([]);
@@ -461,15 +485,17 @@ export function App() {
       return;
     }
     const canSend = regenerate || input.trim() || attachments.length > 0;
-    if (locked.current || loading || !canSend) return;
+    if (locked.current || loading || attachments.some((a) => a.uploading) || !canSend) return;
     locked.current = true;
     setBusy(true);
     setError("");
     setStatus("Connecting to " + (providers.find((p) => p.id === provider)?.name || "model") + "…");
     setAtBottom(true);
 
-    const content = input;
-    const currentAttachments = [...attachments];
+    const content = regenerate ? "" : input;
+    const currentAttachments = regenerate ? [] : [...attachments];
+    const editingId = regenerate ? null : edit;
+    let accepted = false;
     const currentWebSearch = wantsImage ? false : webSearch;
     let cid = id;
     const abort = new AbortController();
@@ -489,7 +515,7 @@ export function App() {
       if (abort.signal.aborted) return;
 
       setMessages((old) => {
-        const editIdx = edit !== null ? old.findIndex((m) => m.id === edit) : -1;
+        const editIdx = editingId !== null ? old.findIndex((m) => m.id === editingId) : -1;
         const next =
           editIdx !== -1
             ? old.slice(0, editIdx)
@@ -520,8 +546,10 @@ export function App() {
         ];
       });
 
-      setInput("");
-      setAttachments([]);
+      if (!regenerate) {
+        setInput("");
+        setAttachments([]);
+      }
 
       await streamChat(
         {
@@ -531,7 +559,7 @@ export function App() {
           provider,
           temperature,
           regenerate,
-          edit_message_id: edit,
+          edit_message_id: editingId,
           attachment_ids: currentAttachments.map((a) => a.id),
           web_search: currentWebSearch,
           output_mode: wantsImage ? "image" : "chat",
@@ -539,6 +567,7 @@ export function App() {
         },
         abort.signal,
         (event) => {
+          if (event.type === "start" || event.type === "done") accepted = true;
           if (event.type === "agent_step" || event.type === "agent_action") {
             setMessages((old) =>
               old.map((m) =>
@@ -552,8 +581,8 @@ export function App() {
                           action: event.action || "tool",
                           tool: event.tool,
                           thought: event.thought,
-                          input: event.input,
-                          output: event.output,
+                          input: event.args || event.input,
+                          status: "running",
                         },
                       ],
                     }
@@ -601,6 +630,12 @@ export function App() {
             );
             setStatus(event.auto_reason || `Shifted to ${event.model}…`);
           }
+          if (event.type === "agent_tool_result") {
+            setMessages((old) => old.map((m) => m.id === assistantId ? {
+              ...m, agent_steps: m.agent_steps?.map((step) => step.step === event.step
+                ? { ...step, status: event.status || "complete" } : step),
+            } : m));
+          }
           if (event.type === "status") setStatus(event.message);
           if (event.type === "token") {
             accumulated += event.content;
@@ -622,7 +657,7 @@ export function App() {
     } catch (e) {
       if ((e as Error).name !== "AbortError") {
         setError((e as Error).message || "Network interrupted. Try again.");
-        if (!regenerate) {
+        if (!regenerate && !accepted) {
           setInput(content);
           setAttachments(currentAttachments);
         }
@@ -646,7 +681,7 @@ export function App() {
           );
         }
       }
-      setEdit(null);
+      if (!regenerate && accepted) setEdit(null);
       setBusy(false);
       locked.current = false;
       controller.current = null;

@@ -2188,9 +2188,9 @@ dialog::backdrop {
   .mobile-header-brand {
     display: flex;
     align-items: center;
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
+    position: static;
+    flex: 1;
+    min-width: 0;
     font-size: 20px;
     font-weight: 700;
     pointer-events: none;
@@ -2799,3 +2799,27 @@ button.unified-menu-item:focus-visible {outline:2px solid var(--accent);outline-
   .category-select-setting { width: 100%; }
 }
 
+
+/* Keep settings drafts mounted without exposing hidden controls to keyboard users. */
+.settings-modal-dialog .tab-pane[hidden] { display: none; }
+.error { overflow-wrap: anywhere; align-items: flex-start; }
+.error > button { flex-shrink: 0; min-width: 32px; min-height: 32px; }
+.edit-note { align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); font-size: 13px; }
+.edit-note button { min-height: 32px; flex-shrink: 0; }
+.attachment-chip { min-width: 0; max-width: 100%; }
+.agent-step-status { font-size: 11px; color: var(--text-secondary); text-transform: capitalize; }
+@media (hover: none), (pointer: coarse) {
+  .message.user .message-actions { opacity: 1; pointer-events: auto; }
+  .message-actions .action-btn { min-height: 40px; min-width: 40px; }
+}
+
+@media (max-width: 600px) {
+  .header-left { flex: 0 0 auto; }
+  .mobile-header-brand .brand-copy { min-width: 0; }
+  .mobile-header-brand .brand-tagline { white-space: nowrap; }
+  .header-right { gap: 4px; }
+  .forma-auto-pill { padding: 0 9px; gap: 5px; min-height: 40px; }
+  .forma-auto-prefix { display: none; }
+  .forma-auto-pill-text { max-width: 76px; }
+  .header-action-btn { width: 32px; min-height: 40px; }
+}

@@ -27,6 +27,7 @@ export type AgentStep = {
   thought?: string;
   input?: Record<string, any>;
   output?: string;
+  status?: string;
 };
 
 export type Message = {
@@ -64,6 +65,7 @@ export async function uploadAttachment(
   cid: string,
   file: File,
   onProgress?: (percent: number) => void,
+  signal?: AbortSignal,
 ): Promise<Attachment> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -101,7 +103,15 @@ export async function uploadAttachment(
       }
     };
 
+    const abort = () => xhr.abort();
     xhr.onerror = () => reject(new Error("Network error during file upload."));
+    xhr.onabort = () => reject(new DOMException("Upload cancelled", "AbortError"));
+    xhr.onloadend = () => signal?.removeEventListener("abort", abort);
+    if (signal?.aborted) {
+      reject(new DOMException("Upload cancelled", "AbortError"));
+      return;
+    }
+    signal?.addEventListener("abort", abort, { once: true });
     xhr.send(formData);
   });
 }

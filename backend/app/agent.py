@@ -43,6 +43,21 @@ def format_tools_description() -> str:
     return '\n'.join(lines)
 
 
+def require_answer(value: Any) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError('The model returned an empty or invalid answer. Please retry.')
+    return value
+
+
+def response_text(data: Any, is_openai_format: bool) -> str:
+    try:
+        value = (data['choices'][0]['message']['content'] if is_openai_format
+                 else data['message']['content'])
+    except (KeyError, IndexError, TypeError) as exc:
+        raise ValueError('The model returned an invalid answer format.') from exc
+    return require_answer(value)
+
+
 def parse_agent_action(text: str) -> dict[str, Any]:
     """Parse JSON action block from model response."""
     # Look for code block ```json ... ```
@@ -125,10 +140,7 @@ async def run_agent_workflow(
             resp = await client.post(endpoint, json=payload)
             resp.raise_for_status()
             data = resp.json()
-            raw_text = (
-                data.get('choices', [{}])[0].get('message', {}).get('content', '')
-                if is_openai_format else data.get('message', {}).get('content', '')
-            )
+            raw_text = response_text(data, is_openai_format)
         except Exception as exc:
             log.warning('Agent model inference error: %s', exc)
             raise
@@ -137,13 +149,15 @@ async def run_agent_workflow(
         action_type = decision.get('action')
 
         if action_type == 'finish':
-            final_answer = decision.get('answer') or raw_text
+            final_answer = require_answer(decision.get('answer'))
             await emit_fn('status', message='Agent workflow complete. Delivering synthesis.')
             return final_answer
 
         elif action_type == 'tool':
             tool_name = decision.get('tool', '')
             args = decision.get('args', {})
+            if not isinstance(args, dict) or not isinstance(tool_name, str):
+                raise ValueError('The model returned an invalid tool action.')
             thought = decision.get('thought', f"Executing {tool_name}…")
 
             steps_taken += 1
@@ -169,8 +183,7 @@ async def run_agent_workflow(
             await emit_fn('agent_tool_result', step=steps_taken, tool=tool_name, status=tool_output.get('status'))
 
         else:
-            # Fallback if unknown action
-            return raw_text
+            raise ValueError('The model returned an unsupported Agent action.')
 
     # If loop exhausted max_steps, synthesize final answer with current observations
     await emit_fn('status', message='Reached step limit. Synthesizing available findings…')
@@ -188,7 +201,8 @@ async def run_agent_workflow(
     resp = await client.post(endpoint, json={'model': model, 'messages': summary_messages, 'stream': False})
     resp.raise_for_status()
     data = resp.json()
-    return (
-        data.get('choices', [{}])[0].get('message', {}).get('content', '')
-        if is_openai_format else data.get('message', {}).get('content', '')
-    )
+    final_text = response_text(data, is_openai_format)
+    final_action = parse_agent_action(final_text)
+    if final_action.get('action') != 'finish':
+        raise ValueError('The model did not provide a final answer after the tool limit.')
+    return require_answer(final_action.get('answer'))
